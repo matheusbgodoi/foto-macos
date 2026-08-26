@@ -8,6 +8,7 @@ Subcomandos:
   foto gerar    "descricao" [--estilo X]  cria imagem do zero (roteamento automatico)
   foto ampliar  IMAGEM [--escala 2]       upscale
   foto refs     FOTO...                   prepara referencias de identidade
+  foto status                              diagnostica motores e modelos
 
 Regras aprendidas na marra (nao mexa sem medir):
   * TURBO 4 steps CFG 1 e a configuracao certa neste M5. Medido: 10 steps com
@@ -27,6 +28,16 @@ PY = os.environ.get("FOTO_PYTHON") or os.path.expanduser(
 
 def run(script, args):
     return subprocess.call([PY, os.path.join(HERE, script)] + args)
+
+
+def ensure_comfy():
+    """Inicia o ComfyUI local usando a mesma trava compartilhada do MCP."""
+    from comfy_service import ensure_comfy as start
+    error = start()
+    if error:
+        print(error, file=sys.stderr)
+        return False
+    return True
 
 
 def main():
@@ -85,9 +96,16 @@ def main():
     r = sub.add_parser("refs", help="prepara fotos de referencia de identidade")
     r.add_argument("fotos", nargs="+")
 
+    sub.add_parser("status", help="diagnostica motores, modelos e ComfyUI")
+
     a = ap.parse_args()
 
+    if a.cmd == "status":
+        return run("status.py", [])
+
     if a.cmd == "editar":
+        if not ensure_comfy():
+            return 1
         saida = a.saida or (os.path.splitext(a.foto)[0] + "_editada.png")
         args = [a.foto, a.instrucao, "--saida", saida, "--mp", str(a.mp)]
         if a.nao:
@@ -100,6 +118,8 @@ def main():
         return run("pipeline.py", args)
 
     if a.cmd == "cena":
+        if not ensure_comfy():
+            return 1
         args = [a.descricao, "--tamanho", a.tamanho]
         for ref in a.ref:
             args += ["--ref", ref]
@@ -110,6 +130,8 @@ def main():
         return run("flux2.py", args)
 
     if a.cmd == "vestir":
+        if not ensure_comfy():
+            return 1
         if a.ref_roupa:
             print("erro: --ref-roupa nao e aceito por 'foto vestir': o editor pode "
                   "colar partes da pessoa da referencia. Para uma composicao nova, "
@@ -130,6 +152,13 @@ def main():
         return run("pipeline.py", args)
 
     if a.cmd == "gerar":
+        auto_comfy = False
+        if a.motor == "auto" and not a.lora:
+            from gerar_coringa import detect_style, drawthings_available
+            resolved_style = detect_style(a.prompt) if a.estilo == "auto" else a.estilo
+            auto_comfy = resolved_style != "famegrid" and not drawthings_available()
+        if (a.motor in ("sdxl", "flux2") or a.lora or auto_comfy) and not ensure_comfy():
+            return 1
         args = [a.prompt, "--tamanho", a.tamanho, "--estilo", a.estilo,
                 "--motor", a.motor]
         if a.saida:

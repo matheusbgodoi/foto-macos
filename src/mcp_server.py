@@ -13,12 +13,11 @@ Registrar no CRIAs AI / Codex: novo conector "stdio" com o mesmo comando.
 Operacoes que precisam do ComfyUI iniciam o servico local automaticamente.
 """
 import os
-import fcntl
 import subprocess
 import sys
 import time
-import urllib.request
-from urllib.parse import urlparse
+
+from comfy_service import comfy_ok as _comfy_ok, ensure_comfy as _exige_comfy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PY = os.environ.get("FOTO_PYTHON") or os.path.expanduser(
@@ -42,66 +41,10 @@ app = MCPServer(
 )
 
 
-def _comfy_ok() -> bool:
-    try:
-        with urllib.request.urlopen(COMFY + "/system_stats", timeout=3):
-            pass
-        return True
-    except Exception:
-        return False
-
-
 def _rodar(script: str, args: list, timeout: int = 1800):
     r = subprocess.run([PY, os.path.join(HERE, script)] + [str(x) for x in args],
                        capture_output=True, text=True, timeout=timeout)
     return (r.stdout or "") + (r.stderr or ""), r.returncode
-
-
-def _exige_comfy():
-    if _comfy_ok():
-        return None
-    parsed = urlparse(COMFY)
-    if parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
-        return f"ComfyUI remoto nao responde em {COMFY}; inicio automatico so vale para localhost"
-
-    comfy_dir = os.path.abspath(os.path.expanduser(
-        os.environ.get("COMFYUI_DIR", "~/comfyui")))
-    state_dir = os.path.expanduser("~/Library/Application Support/foto-macos")
-    os.makedirs(state_dir, exist_ok=True)
-    lock_path = os.path.join(state_dir, "comfy-start.lock")
-    log_path = os.path.join(state_dir, "comfy-autostart.log")
-
-    # Cada cliente abre seu proprio MCP. A trava impede CRIAs, Claude e Codex
-    # de iniciarem tres instancias quando recebem pedidos ao mesmo tempo.
-    with open(lock_path, "a+", encoding="utf-8") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        if _comfy_ok():
-            return None
-        if not os.path.isfile(PY):
-            return f"Python do ComfyUI ausente: {PY}"
-        command = [
-            PY, os.path.join(comfy_dir, "main.py"),
-            "--use-pytorch-cross-attention", "--reserve-vram", "6",
-            "--force-fp16", "--port", str(parsed.port or 8188),
-            "--listen", parsed.hostname or "127.0.0.1",
-        ]
-        try:
-            with open(log_path, "ab", buffering=0) as log:
-                process = subprocess.Popen(
-                    command, cwd=comfy_dir, stdout=log, stderr=subprocess.STDOUT,
-                    start_new_session=True, env=os.environ.copy(),
-                )
-        except OSError as exc:
-            return f"nao foi possivel iniciar o ComfyUI: {exc}"
-        deadline = time.time() + 120
-        while time.time() < deadline:
-            if _comfy_ok():
-                return None
-            if process.poll() is not None:
-                break
-            time.sleep(1)
-    return (f"ComfyUI nao iniciou em {COMFY}. Consulte {log_path} "
-            f"(processo encerrou com {process.poll()}).")
 
 
 @app.tool(
@@ -285,36 +228,8 @@ def foto_cena(
 @app.tool(description="Verifica se o ComfyUI esta no ar e quais modelos do pipeline estao instalados.")
 def foto_status() -> str:
     """Diagnostico do ambiente."""
-    m = os.path.expanduser(os.environ.get("COMFYUI_DIR", "~/comfyui") + "/models")
-    precisa = {
-        "editar": f"{m}/diffusion_models/mage_flow_edit_turbo_bf16.safetensors",
-        "encoder": f"{m}/text_encoders/qwen3vl_4b_bf16.safetensors",
-        "vae": f"{m}/vae/mage_flow_vae_bf16.safetensors",
-        "polir": f"{m}/checkpoints/RealVisXL_V5.0_fp16.safetensors",
-        "pele": f"{m}/upscale_models/1x-ITF-SkinDiffDetail-Lite-v1.pth",
-        "gerar/referencias": f"{m}/diffusion_models/flux-2-klein-4b.safetensors",
-    }
-    linhas = [f"ComfyUI em {COMFY}: {'no ar' if _comfy_ok() else 'FORA DO AR'}"]
-    for k, v in precisa.items():
-        linhas.append(f"  {'ok   ' if os.path.exists(v) else 'FALTA'} {k}: {os.path.basename(v)}")
-    draw_cli = os.path.expanduser(os.environ.get(
-        "DRAWTHINGS_BIN", "/opt/homebrew/bin/draw-things-cli"))
-    draw_model = os.path.expanduser(os.path.join(os.environ.get(
-        "DRAWTHINGS_MODELS_DIR",
-        "~/Library/Application Support/local-photo-ai-m5/models"),
-        "z_image_turbo_1.0_i8x.ckpt"))
-    draw_ok = os.path.isfile(draw_cli) and os.path.isfile(draw_model)
-    linhas.append(f"  {'ok   ' if draw_ok else 'opcional ausente'} gerar rapido: Draw Things + Z-Image i8x")
-    famegrid = os.path.expanduser(
-        "~/Library/Application Support/foto-macos/loras/krea2/"
-        "Famegrid-Natural-V1-Krea-2.safetensors")
-    try:
-        from krea2 import model_path as krea_model_path
-        krea_ok = os.path.isfile(famegrid) and bool(krea_model_path())
-    except Exception:
-        krea_ok = False
-    linhas.append(f"  {'ok   ' if krea_ok else 'opcional ausente'} fotorrealismo: Krea 2 Q4 + Famegrid")
-    return "\n".join(linhas)
+    from status import report
+    return report()
 
 
 @app.tool(
