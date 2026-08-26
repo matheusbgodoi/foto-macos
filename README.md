@@ -69,6 +69,7 @@ instala os workflows visuais e aplica a correção do SeedVR2 documentada em
 i8x não existem, `foto gerar` cai automaticamente no FLUX.2/ComfyUI.
 
 Modelos, tamanhos e licenças: [docs/MODELOS.md](docs/MODELOS.md).
+Comparação de modelos, funções e tempos: [docs/COMPARACAO.md](docs/COMPARACAO.md).
 Tutorial operacional: [docs/TUTORIAL.md](docs/TUTORIAL.md).
 
 ## Uso
