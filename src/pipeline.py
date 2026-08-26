@@ -3,15 +3,18 @@
 
     1. EDITAR    Mage-Flow-Edit-Turbo, 4 steps, CFG 1     (~45-160 s)
     2. POLIR     SDXL denoise 0.03 + 1x-ITF-SkinDiffDetail (~130 s)
-    3. CABECA    recola a cabeca da foto original          (instantaneo)
-    4. GRAO      injeta o grao que falta na area editada   (instantaneo)
-    5. AMPLIAR   SeedVR2 2x (opcional)                     (~26 s)
+    3. AMPLIAR   SeedVR2 2x, somente na imagem editada      (~26 s, opcional)
+    4. CABECA    recola a cabeca da foto original          (~1 s)
+    5. GRAO      injeta o grao que falta na area editada   (instantaneo)
 
-A ORDEM IMPORTA e foi aprendida errando:
-  * POLIR vem antes de CABECA. Polir depois regenera o rosto que acabou de ser
-    preservado — foi assim que uma versao saiu "com cara de IA em tudo".
-  * AMPLIAR vem por ultimo, pelo mesmo motivo.
-  * CABECA so vale quando a pose nao muda (edicao sobre a propria foto).
+A ORDEM IMPORTA e foi aprendida errando. Tudo que e GENERATIVO tem de acontecer
+ANTES do composite da cabeca, porque qualquer passe generativo posterior refaz o
+rosto que o composite acabou de preservar. Isso vale para o POLIR e vale para o
+AMPLIAR — o SeedVR2 reconstroi tudo que enxerga.
+Quando se amplia, a FOTO original nunca passa pelo SeedVR2. Ela chega ao
+composite por Lanczos, que muda a grade sem inventar poros, cabelo ou tracos.
+O composite continua sendo o ultimo estagio que pode tocar na cabeca.
+CABECA so vale quando a pose nao muda (edicao sobre a propria foto).
 """
 import argparse, os, subprocess, sys, time
 
@@ -58,7 +61,8 @@ def main():
     ap.add_argument("--sem-cabeca", action="store_true",
                     help="use quando a pose/enquadramento mudarem")
     ap.add_argument("--sem-grao", action="store_true")
-    ap.add_argument("--ampliar", action="store_true", help="SeedVR2 2x no fim")
+    ap.add_argument("--ampliar", action="store_true",
+                    help="SeedVR2 2x antes do composite final da cabeca")
     a = ap.parse_args()
 
     foto = os.path.abspath(os.path.expanduser(a.foto))
@@ -85,22 +89,30 @@ def main():
                 "2/5 polir (SDXL denoise 0.03 + pele)"):
             atual = achar(tag + "p") or atual
 
-    # 3. CABECA
-    if not a.sem_cabeca:
-        alvo = os.path.join(OUT, tag + "_head.png")
-        if step("cabeca.py", [foto, atual, alvo], "3/5 recolar cabeca original"):
-            atual = alvo
-
-    # 4. GRAO
-    if not a.sem_grao:
-        alvo = os.path.join(OUT, tag + "_grao.png")
-        if step("grao.py", [foto, atual, alvo], "4/5 casar grao"):
-            atual = alvo
-
-    # 5. AMPLIAR
+    # 3. AMPLIAR — ANTES de recolar a cabeca. O SeedVR2 e generativo: se rodar
+    #    depois, ele re-gera justamente o rosto que o composite preservou.
+    #    Ele toca SO na editada. A foto original entra no composite por Lanczos;
+    #    passar a original pelo SeedVR2 seria regenerar o rosto por outra porta.
     if a.ampliar:
         alvo = os.path.join(OUT, tag + "_2x.png")
-        if step("ampliar.py", [atual, "--out", alvo], "5/5 ampliar (SeedVR2 2x)"):
+        if step("ampliar.py", [atual, "--out", alvo], "3/5 ampliar editada (SeedVR2 2x)"):
+            atual = alvo
+
+    # 4. CABECA
+    if not a.sem_cabeca:
+        alvo = os.path.join(OUT, tag + "_head.png")
+        cabeca_args = [foto, atual, alvo]
+        if a.ampliar:
+            # Mantem a grade ampliada, mas desliga a sintese de nitidez dentro
+            # da cabeca: identidade estrita vale mais que detalhe inventado.
+            cabeca_args += ["--grade", "editada", "--nitidez", "nao"]
+        if step("cabeca.py", cabeca_args, "4/5 recolar cabeca original"):
+            atual = alvo
+
+    # 5. GRAO
+    if not a.sem_grao:
+        alvo = os.path.join(OUT, tag + "_grao.png")
+        if step("grao.py", [foto, atual, alvo], "5/5 casar grao"):
             atual = alvo
 
     os.makedirs(os.path.dirname(saida) or ".", exist_ok=True)

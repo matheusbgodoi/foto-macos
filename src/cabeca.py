@@ -16,11 +16,11 @@ que e o "fade esquisito". Ver blend.py.
 
 Ordem do que este script faz — e a ordem importa:
 
-  1. PARIDADE DE GRADE — compoe na resolucao NATIVA da original. Ampliar a foto
-     de 640 px para 1278 px com LANCZOS destroi ~54% da energia da oitava mais
-     fina do rosto ANTES de qualquer blend, e nenhum blend conserta isso depois.
-     A resolucao volta no estagio 5 (SeedVR2), aplicado ao composto INTEIRO —
-     que de quebra uniformiza a textura.
+  1. PARIDADE DE GRADE — por padrao compoe na resolucao NATIVA da original.
+     Ampliar a foto de 640 px para 1278 px com LANCZOS destroi ~54% da energia
+     da oitava mais fina do rosto antes de qualquer blend. Quando o pipeline
+     pede upscale, o SeedVR2 toca somente a imagem editada e esta etapa recebe
+     a grade ampliada; a cabeca original entra por reamostragem deterministica.
   2. MASCARA SEMANTICA — contorno real de cabelo+rosto+pescoco pelo Vision
      (headseg.py), com fio de cabelo. A elipse inclui fundo perto das orelhas e
      do ombro, e o multi-banda faz esse fundo ORIGINAL reaparecer sobre o fundo
@@ -90,8 +90,7 @@ def main():
                     help="depois de compor na grade da original, devolve o "
                          "tamanho da editada com LANCZOS. Os dois lados passam "
                          "pelo MESMO reamostrador, entao a costura continua "
-                         "invisivel — so nao recupera detalhe. Prefira deixar o "
-                         "estagio de ampliar (SeedVR2) fazer isso")
+                         "invisivel — so nao recupera detalhe")
     ap.add_argument("--mascara", choices=("auto", "elipse"), default="auto")
     ap.add_argument("--feather", type=float, default=2.0,
                     help="raio da mascara BASE. 2 px, so para matar serrilhado. "
