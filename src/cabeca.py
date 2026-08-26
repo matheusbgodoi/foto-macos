@@ -14,6 +14,7 @@ import argparse
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
+import blend as blendlib
 import facedet
 
 
@@ -41,6 +42,8 @@ def main():
     ap.add_argument("--cima", type=float, default=2.1)
     ap.add_argument("--baixo", type=float, default=1.35)
     ap.add_argument("--debug-mask", default=None)
+    ap.add_argument("--alfa", action="store_true",
+                    help="composicao alfa simples (antiga); deixa emenda visivel")
     a = ap.parse_args()
 
     o = Image.open(a.original).convert("RGB")
@@ -61,13 +64,25 @@ def main():
 
     m = head_mask(det, (e.height, e.width), a.largura, a.cima, a.baixo)
     m = m.filter(ImageFilter.GaussianBlur(a.feather))
-    mask = np.asarray(m).astype(np.float32)[..., None] / 255.0
+    mask = np.asarray(m).astype(np.float32) / 255.0
 
-    out = np.asarray(e).astype(np.float32) * (1 - mask) + np.asarray(o).astype(np.float32) * mask
+    E = np.asarray(e).astype(np.float32)
+    O = np.asarray(o).astype(np.float32)
+    if a.alfa:
+        out = E * (1 - mask[..., None]) + O * mask[..., None]
+    else:
+        # 1) aproxima o tom da original ao da editada, medindo num anel em volta
+        #    da mascara — sem isso sobra um degrau de cor mesmo com bom blend
+        O = blendlib.casar_cor(O, E, mask)
+        # 2) mistura por piramide Laplaciana: transicao larga nas baixas
+        #    frequencias, estreita nas altas. E o que apaga a borda oval.
+        out = blendlib.blend(E, O, mask)
     Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).save(a.saida)
     if a.debug_mask:
         m.save(a.debug_mask)
-    print(f"[cabeca] {a.saida} — cabeca original recolada ({mask.mean()*100:.1f}% do quadro)")
+    modo = "alfa" if a.alfa else "multi-banda"
+    print(f"[cabeca] {a.saida} — cabeca original recolada "
+          f"({mask.mean()*100:.1f}% do quadro, blend {modo})")
 
 
 if __name__ == "__main__":

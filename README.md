@@ -80,6 +80,23 @@ Lista completa de modelos, tamanhos e links: **[docs/MODELOS.md](docs/MODELOS.md
 
 ---
 
+## Conectar aos agentes
+
+Este repositório expõe um **servidor MCP** (`foto-edit`), então CRIAs AI,
+Claude Code e Codex conseguem editar fotos direto.
+
+```bash
+claude mcp add --scope user foto-edit -- \
+  ~/comfyui/.venv/bin/python ~/src/foto-macos/src/mcp_server.py
+```
+
+⚠️ Não confunda com o conector **`local-photo`** ("Local Photo AI"), que é outra
+coisa: ele **gera** imagem do zero via Draw Things. Este aqui **edita** uma foto
+existente. Regra: sem foto de entrada → `local-photo`; com foto de entrada →
+`foto-edit`. Detalhes em **[docs/CONECTORES.md](docs/CONECTORES.md)**.
+
+---
+
 ## Uso
 
 ```bash
