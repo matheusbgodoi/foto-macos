@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Servidor MCP do foto-macos — expoe a EDICAO de foto para agentes.
+"""Servidor MCP do foto-macos — edicao e geracao de imagem local.
 
-NAO confundir com o MCP `local-photo` (Draw Things + Z-Image), que GERA imagem
-do zero. Este aqui EDITA uma foto que ja existe, preservando o rosto real.
+Sobrepoe em parte o MCP `local-photo` (Draw Things + Z-Image), que so gera do
+zero. Este aqui gera E edita, e na edicao preserva o rosto real da pessoa.
 
 Registrar no Claude Code:
     claude mcp add foto-edit -- ~/comfyui/.venv/bin/python \\
@@ -31,10 +31,11 @@ app = MCPServer(
     name="foto-macos",
     instructions=(
         "Edicao de foto local por instrucao, preservando o rosto real da pessoa. "
-        "Use foto_editar para alterar uma foto QUE JA EXISTE (trocar roupa, remover "
-        "objeto, trocar fundo). Nao serve para criar imagem do zero — para isso use "
-        "o MCP local-photo. Tambem nao coloca uma pessoa numa cena nova a partir de "
-        "selfie: o rosto sairia parecido, nao identico."
+        "foto_editar altera uma foto QUE JA EXISTE (trocar roupa, remover objeto, "
+        "trocar fundo) preservando o rosto real. foto_gerar cria imagem do zero a "
+        "partir de texto, com SDXL e LoRAs de estilo. "
+        "Limite conhecido: nao coloca uma pessoa numa cena nova a partir de uma "
+        "selfie — o rosto sairia parecido, nao identico."
     ),
 )
 
@@ -141,6 +142,49 @@ def foto_referencias(fotos: list[str]) -> str:
     """Prepara as referencias e devolve o relatorio por arquivo."""
     txt, _ = _rodar("prepref.py", [os.path.expanduser(f) for f in fotos], timeout=300)
     return txt[-1500:]
+
+
+@app.tool(
+    description=(
+        "Cria uma imagem DO ZERO a partir de texto, com SDXL. Aceita LoRAs de estilo "
+        "(desenho, anime, fotografia, produto) — o ecossistema SDXL tem dezenas de "
+        "milhares delas. ~50 s a 1 MP. Para EDITAR uma foto existente use foto_editar."
+    )
+)
+def foto_gerar(
+    prompt: str,
+    saida: str = "",
+    tamanho: str = "1024x1024",
+    steps: int = 25,
+    cfg: float = 5.0,
+    seed: int = 0,
+    loras: list[str] | None = None,
+) -> str:
+    """Gera a imagem e devolve o caminho.
+
+    Args:
+        prompt: descricao da cena, em ingles funciona melhor.
+        saida: caminho do arquivo final.
+        tamanho: "LARGURAxALTURA". SDXL rende melhor perto de 1 MP.
+        steps: 25 e um bom padrao; abaixo de 15 perde detalhe.
+        cfg: 5.0. Acima de 8 satura e endurece a pele.
+        seed: 0 = aleatoria.
+        loras: nomes de arquivo em models/loras, opcionalmente "nome:forca".
+    """
+    erro = _exige_comfy()
+    if erro:
+        return erro
+    args = [prompt, "--tamanho", tamanho, "--steps", steps, "--cfg", cfg]
+    if saida:
+        args += ["--saida", os.path.abspath(os.path.expanduser(saida))]
+    if seed:
+        args += ["--seed", seed]
+    for l in (loras or []):
+        args += ["--lora", l]
+    txt, rc = _rodar("gerar.py", args)
+    if rc != 0:
+        return f"falhou:\n{txt[-1200:]}"
+    return txt.strip().splitlines()[-1]
 
 
 @app.tool(description="Verifica se o ComfyUI esta no ar e quais modelos do pipeline estao instalados.")

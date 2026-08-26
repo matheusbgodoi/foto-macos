@@ -5,6 +5,7 @@ Subcomandos:
   foto editar   FOTO "instrucao"          edita a foto (rosto/fundo preservados)
   foto cena     "descricao" --ref A --ref B   compoe cena nova a partir de referencias
   foto vestir   FOTO ROUPA                troca a roupa da foto pela da referencia
+  foto gerar    "descricao" [--lora X]    cria imagem do zero (SDXL + LoRA)
   foto ampliar  IMAGEM [--escala 2]       upscale
   foto refs     FOTO...                   prepara referencias de identidade
   foto rosto    REAL GERADA               recoloca o rosto real na imagem gerada
@@ -63,6 +64,17 @@ def main():
                         "modelo colar partes dela na cena — medido e reprovado.")
     v.add_argument("--seed", type=int); v.add_argument("--out", default="vestir")
 
+    g = sub.add_parser("gerar", help="cria imagem do zero (SDXL, aceita LoRA)")
+    g.add_argument("prompt")
+    g.add_argument("--saida", default=None)
+    g.add_argument("--nao", default=None, help="prompt negativo")
+    g.add_argument("--tamanho", default="1024x1024")
+    g.add_argument("--steps", type=int, default=25)
+    g.add_argument("--cfg", type=float, default=5.0)
+    g.add_argument("--seed", type=int)
+    g.add_argument("--lora", action="append", default=[],
+                   help="arquivo.safetensors[:forca], repetivel")
+
     u = sub.add_parser("ampliar", help="upscale (SeedVR2 por padrao)")
     u.add_argument("imagem"); u.add_argument("--escala", type=float, default=2.0)
     u.add_argument("--out", default=None, help="arquivo de saida (padrao: <nome>_2x.png)")
@@ -114,6 +126,19 @@ def main():
         if a.seed:
             args += ["--seed", str(a.seed)]
         return run("mage.py", args)
+
+    if a.cmd == "gerar":
+        args = [a.prompt, "--tamanho", a.tamanho, "--steps", str(a.steps),
+                "--cfg", str(a.cfg)]
+        if a.saida:
+            args += ["--saida", a.saida]
+        if a.nao:
+            args += ["--nao", a.nao]
+        if a.seed:
+            args += ["--seed", str(a.seed)]
+        for l in a.lora:
+            args += ["--lora", l]
+        return run("gerar.py", args)
 
     if a.cmd == "ampliar":
         out = a.out or os.path.splitext(a.imagem)[0] + f"_{int(a.escala)}x.png"
