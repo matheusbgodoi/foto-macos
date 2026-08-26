@@ -35,7 +35,8 @@ app = MCPServer(
         "Edicao de foto local por instrucao, preservando o rosto real da pessoa. "
         "foto_editar altera uma foto QUE JA EXISTE (trocar roupa, remover objeto, "
         "trocar fundo) preservando o rosto real. foto_gerar cria imagem do zero "
-        "e escolhe automaticamente o motor Apple mais adequado. foto_cena usa "
+        "e escolhe automaticamente o motor Apple mais adequado. Nomes presentes "
+        "no registro privado de identidades carregam sua LoRA Krea automaticamente. foto_cena usa "
         "uma ou mais imagens de referencia para criar uma composicao nova."
     ),
 )
@@ -131,7 +132,8 @@ def foto_referencias(fotos: list[str]) -> str:
         "Cria uma imagem DO ZERO e escolhe o motor automaticamente: Draw Things + "
         "Z-Image para fotografia/estilos rapidos; MLX + Krea 2/Famegrid para o teto "
         "de fotorrealismo; ComfyUI + SDXL quando uma LoRA SDXL for fornecida; "
-        "FLUX.2 quando explicitamente pedido. Para editar uma foto "
+        "FLUX.2 quando explicitamente pedido. Uma identidade cadastrada pelo nome "
+        "e roteada automaticamente para Krea 2 + Famegrid + LoRA de identidade. Para editar uma foto "
         "existente use foto_editar; para varias referencias use foto_cena."
     )
 )

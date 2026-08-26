@@ -60,6 +60,14 @@ PHOTO_PROMPTS = {
 
 
 def detect_style(prompt):
+    # Uma identidade cadastrada localmente implica Krea 2: o gerador rapido
+    # nao sabe carregar a LoRA de identidade e produziria outra pessoa.
+    try:
+        from krea2 import identity_matches
+        if identity_matches(prompt):
+            return "famegrid"
+    except Exception:
+        pass
     text = prompt.lower()
     tests = (
         ("famegrid", ("famegrid", "krea 2", "qualidade maxima",
