@@ -17,6 +17,8 @@ class RouterTests(unittest.TestCase):
             "um cachorro em desenho animado": "cartoon",
             "personagem de anime": "anime",
             "foto de celular na praia": "iphone",
+            "qualidade máxima, indistinguível de real": "famegrid",
+            "Famegrid em uma cozinha": "famegrid",
             "uma pessoa na rua": "foto-natural",
         }
         for prompt, expected in cases.items():

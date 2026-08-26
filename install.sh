@@ -69,10 +69,19 @@ fi
 # ── CLI ───────────────────────────────────────────────────────────────────────
 mkdir -p "$BIN"
 ln -sf "$HERE/src/foto.py" "$BIN/foto"
-chmod +x "$HERE/src/foto.py"
+chmod +x "$HERE/src/foto.py" "$HERE/src/krea2.py" "$HERE/src/civitai.py"
 info "CLI instalado em $BIN/foto"
 
 # ── workflows visuais ────────────────────────────────────────────────────────
+CUSTOM_NODE="$COMFY/custom_nodes/foto-macos"
+if [[ -L "$CUSTOM_NODE" && "$(readlink "$CUSTOM_NODE")" == "$HERE/integrations/comfyui" ]]; then
+    info "custom node foto-macos ja instalado"
+elif [[ -e "$CUSTOM_NODE" || -L "$CUSTOM_NODE" ]]; then
+    warn "$CUSTOM_NODE ja existe; preservei o caminho. Instale integrations/comfyui manualmente."
+else
+    ln -s "$HERE/integrations/comfyui" "$CUSTOM_NODE"
+    info "custom node foto-macos instalado"
+fi
 "$PY" "$HERE/src/sync_workflows.py" >/dev/null
 info "workflows instalados em $COMFY/user/default/workflows/foto-macos"
 
@@ -81,6 +90,24 @@ if command -v draw-things-cli >/dev/null && [[ -f "$DRAW_MODEL" ]]; then
     info "Draw Things + Z-Image i8x encontrados (backend rapido para gerar)"
 else
     warn "Draw Things/Z-Image i8x ausente; foto gerar usara FLUX.2 no ComfyUI"
+fi
+
+FAMEGRID="$HOME/Library/Application Support/foto-macos/loras/krea2/Famegrid-Natural-V1-Krea-2.safetensors"
+KREA_SNAPSHOTS="$HOME/.cache/huggingface/hub/models--mflux-community--krea-2-turbo-mflux-q4/snapshots"
+KREA_COMPLETE=""
+if [[ -d "$KREA_SNAPSHOTS" ]]; then
+    for snapshot in "$KREA_SNAPSHOTS"/*; do
+        if [[ -f "$snapshot/0.safetensors" && -f "$snapshot/1.safetensors" && \
+              -f "$snapshot/2.safetensors" && -f "$snapshot/3.safetensors" ]]; then
+            KREA_COMPLETE="$snapshot"
+            break
+        fi
+    done
+fi
+if [[ -f "$FAMEGRID" && -n "$KREA_COMPLETE" ]]; then
+    info "Krea 2 Q4 + Famegrid encontrados (backend de fotorrealismo)"
+else
+    warn "Krea 2/Famegrid e opcional e sujeito a licenca propria; veja docs/KREA2.md"
 fi
 
 cat <<EOF

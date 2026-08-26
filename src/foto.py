@@ -71,9 +71,9 @@ def main():
     g.add_argument("--seed", type=int)
     g.add_argument("--estilo", default="auto", choices=(
         "auto", "foto-natural", "iphone", "profissional", "produto",
-        "cartoon", "pixel-art", "ilustracao", "anime", "livre"))
+        "cartoon", "pixel-art", "ilustracao", "anime", "famegrid", "livre"))
     g.add_argument("--motor", default="auto",
-                   choices=("auto", "drawthings", "sdxl", "flux2"))
+                   choices=("auto", "drawthings", "krea2", "sdxl", "flux2"))
     g.add_argument("--lora", action="append", default=[],
                    help="LoRA SDXL arquivo.safetensors[:forca]; seleciona SDXL")
 

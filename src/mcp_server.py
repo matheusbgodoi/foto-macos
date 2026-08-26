@@ -10,13 +10,15 @@ Registrar no Claude Code:
 
 Registrar no CRIAs AI / Codex: novo conector "stdio" com o mesmo comando.
 
-Precisa do ComfyUI no ar em 127.0.0.1:8188 — use a ferramenta foto_status.
+Operacoes que precisam do ComfyUI iniciam o servico local automaticamente.
 """
 import os
+import fcntl
 import subprocess
 import sys
 import time
 import urllib.request
+from urllib.parse import urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PY = os.environ.get("FOTO_PYTHON") or os.path.expanduser(
@@ -42,7 +44,8 @@ app = MCPServer(
 
 def _comfy_ok() -> bool:
     try:
-        urllib.request.urlopen(COMFY + "/system_stats", timeout=3)
+        with urllib.request.urlopen(COMFY + "/system_stats", timeout=3):
+            pass
         return True
     except Exception:
         return False
@@ -57,9 +60,48 @@ def _rodar(script: str, args: list, timeout: int = 1800):
 def _exige_comfy():
     if _comfy_ok():
         return None
-    return (f"ComfyUI nao responde em {COMFY}. Suba com:\n"
-            f"  cd ~/comfyui && ./.venv/bin/python main.py "
-            f"--use-pytorch-cross-attention --reserve-vram 2 --listen 127.0.0.1")
+    parsed = urlparse(COMFY)
+    if parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
+        return f"ComfyUI remoto nao responde em {COMFY}; inicio automatico so vale para localhost"
+
+    comfy_dir = os.path.abspath(os.path.expanduser(
+        os.environ.get("COMFYUI_DIR", "~/comfyui")))
+    state_dir = os.path.expanduser("~/Library/Application Support/foto-macos")
+    os.makedirs(state_dir, exist_ok=True)
+    lock_path = os.path.join(state_dir, "comfy-start.lock")
+    log_path = os.path.join(state_dir, "comfy-autostart.log")
+
+    # Cada cliente abre seu proprio MCP. A trava impede CRIAs, Claude e Codex
+    # de iniciarem tres instancias quando recebem pedidos ao mesmo tempo.
+    with open(lock_path, "a+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if _comfy_ok():
+            return None
+        if not os.path.isfile(PY):
+            return f"Python do ComfyUI ausente: {PY}"
+        command = [
+            PY, os.path.join(comfy_dir, "main.py"),
+            "--use-pytorch-cross-attention", "--reserve-vram", "6",
+            "--force-fp16", "--port", str(parsed.port or 8188),
+            "--listen", parsed.hostname or "127.0.0.1",
+        ]
+        try:
+            with open(log_path, "ab", buffering=0) as log:
+                process = subprocess.Popen(
+                    command, cwd=comfy_dir, stdout=log, stderr=subprocess.STDOUT,
+                    start_new_session=True, env=os.environ.copy(),
+                )
+        except OSError as exc:
+            return f"nao foi possivel iniciar o ComfyUI: {exc}"
+        deadline = time.time() + 120
+        while time.time() < deadline:
+            if _comfy_ok():
+                return None
+            if process.poll() is not None:
+                break
+            time.sleep(1)
+    return (f"ComfyUI nao iniciou em {COMFY}. Consulte {log_path} "
+            f"(processo encerrou com {process.poll()}).")
 
 
 @app.tool(
@@ -144,8 +186,9 @@ def foto_referencias(fotos: list[str]) -> str:
 @app.tool(
     description=(
         "Cria uma imagem DO ZERO e escolhe o motor automaticamente: Draw Things + "
-        "Z-Image para fotografia/estilos rapidos; ComfyUI + SDXL quando uma LoRA SDXL "
-        "for fornecida; FLUX.2 quando explicitamente pedido. Para editar uma foto "
+        "Z-Image para fotografia/estilos rapidos; MLX + Krea 2/Famegrid para o teto "
+        "de fotorrealismo; ComfyUI + SDXL quando uma LoRA SDXL for fornecida; "
+        "FLUX.2 quando explicitamente pedido. Para editar uma foto "
         "existente use foto_editar; para varias referencias use foto_cena."
     )
 )
@@ -166,11 +209,27 @@ def foto_gerar(
         tamanho: "LARGURAxALTURA"; perto de 1 MP e o melhor custo/qualidade.
         seed: 0 = aleatoria.
         estilo: auto, foto-natural, iphone, profissional, produto, cartoon,
-            pixel-art, ilustracao, anime ou livre.
-        motor: auto, drawthings, sdxl ou flux2. Deixe auto normalmente.
+            pixel-art, ilustracao, anime, famegrid ou livre.
+        motor: auto, drawthings, krea2, sdxl ou flux2. Use krea2/famegrid para
+            maximizar fotorrealismo; Draw Things continua sendo o modo rapido.
         loras: LoRAs SDXL em models/loras, opcionalmente "nome:forca". Quando
             presentes, o roteador seleciona SDXL.
     """
+    # Esses caminhos enfileiram grafos no ComfyUI. Draw Things e Krea/MLX sao
+    # processos externos e nao devem pagar o custo de iniciar o servidor.
+    auto_needs_comfy = False
+    if motor == "auto" and not loras:
+        try:
+            from gerar_coringa import detect_style, drawthings_available
+            resolved_style = detect_style(prompt) if estilo == "auto" else estilo
+            auto_needs_comfy = (
+                resolved_style != "famegrid" and not drawthings_available())
+        except Exception:
+            auto_needs_comfy = False
+    if motor in ("sdxl", "flux2") or loras or auto_needs_comfy:
+        erro = _exige_comfy()
+        if erro:
+            return erro
     destino = os.path.abspath(os.path.expanduser(saida or os.path.join(
         "~/Downloads", f"foto_{int(time.time())}.png")))
     args = [prompt, "--tamanho", tamanho, "--estilo", estilo,
@@ -246,7 +305,51 @@ def foto_status() -> str:
         "z_image_turbo_1.0_i8x.ckpt"))
     draw_ok = os.path.isfile(draw_cli) and os.path.isfile(draw_model)
     linhas.append(f"  {'ok   ' if draw_ok else 'opcional ausente'} gerar rapido: Draw Things + Z-Image i8x")
+    famegrid = os.path.expanduser(
+        "~/Library/Application Support/foto-macos/loras/krea2/"
+        "Famegrid-Natural-V1-Krea-2.safetensors")
+    try:
+        from krea2 import model_path as krea_model_path
+        krea_ok = os.path.isfile(famegrid) and bool(krea_model_path())
+    except Exception:
+        krea_ok = False
+    linhas.append(f"  {'ok   ' if krea_ok else 'opcional ausente'} fotorrealismo: Krea 2 Q4 + Famegrid")
     return "\n".join(linhas)
+
+
+@app.tool(
+    description=(
+        "Consulta metadados verificaveis de um modelo/LoRA no Civitai: tipo, "
+        "base model, trigger words, arquivos e SHA-256. Aceita URL ou version ID. "
+        "A credencial fica no Keychain e nunca e devolvida."
+    )
+)
+def civitai_modelo(referencia: str) -> str:
+    """Inspeciona um recurso do Civitai sem baixar os pesos."""
+    txt, rc = _rodar("civitai.py", ["info", referencia], timeout=120)
+    return txt[-6000:] if rc == 0 else f"falhou:\n{txt[-1500:]}"
+
+
+@app.tool(
+    description=(
+        "Baixa um modelo/LoRA do Civitai, valida SHA-256 e devolve o caminho. "
+        "Aceita URL ou version ID. Use destino para escolher pasta/arquivo. "
+        "Confira a licenca do modelo antes de distribuir ou usar comercialmente."
+    )
+)
+def civitai_baixar(
+    referencia: str,
+    destino: str = "",
+    arquivo_id: int = 0,
+) -> str:
+    """Download autenticado centralizado; o token permanece no Keychain."""
+    args = ["baixar", referencia]
+    if destino:
+        args += ["--destino", os.path.abspath(os.path.expanduser(destino))]
+    if arquivo_id:
+        args += ["--arquivo", arquivo_id]
+    txt, rc = _rodar("civitai.py", args, timeout=7200)
+    return txt[-2000:] if rc == 0 else f"falhou:\n{txt[-1500:]}"
 
 
 if __name__ == "__main__":

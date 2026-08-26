@@ -22,8 +22,10 @@ Mage-Flow é o editor da foto-base; FLUX.2 Klein é o modelo unificado de geraç
 e multi-referência. RealVisXL serve ao ecossistema SDXL/LoRA e ao polimento de
 denoise 0,03.
 
-O pipeline principal não exige custom node. Os grafos usam nós nativos da
-versão atual do ComfyUI.
+Os grafos Mage/FLUX usam nós nativos da versão atual do ComfyUI. Os dois
+workflows que chamam runtimes Apple externos (Draw Things e Krea/MLX) usam o
+custom node fino em `integrations/comfyui`; ele apenas descarrega pesos MPS,
+executa o mesmo runner do CLI/MCP e devolve uma `IMAGE` ao canvas.
 
 ## Draw Things
 
@@ -39,9 +41,20 @@ mais apropriado ao Apple Silicon que os mesmos pesos BF16 via PyTorch/MPS.
 
 ## MLX
 
-[MFLUX](https://github.com/filipstrand/mflux) executa o SeedVR2 pelo MLX. Os
-pesos (~12 GB) são baixados no primeiro uso. SeedVR2 é generativo: em edição ele
-roda antes do composite da cabeça; se falhar, o fallback é Lanczos.
+[MFLUX](https://github.com/mflux-community/mflux) executa dois componentes:
+
+| papel | modelo | armazenamento | licença/origem |
+|---|---|---:|---|
+| fotorrealismo | Krea 2 Turbo Q4 | ~15,8 GB | [MFLUX Q4](https://huggingface.co/mflux-community/krea-2-turbo-mflux-q4), herdando Krea 2 Community License |
+| estética natural | Famegrid Natural V1 (LoKr) | ~1,5 GB | [Civitai 2088956/3248281](https://civitai.com/models/2088956?modelVersionId=3248281) |
+| ampliar | SeedVR2 | ~12 GB | baixado pelo MFLUX no primeiro uso |
+
+O Krea 2 oficial recomenda treinar LoRAs no Raw e inferir no Turbo; o Famegrid
+declara base Krea 2 e usa a trigger `Famegrid`. O peso sugerido pelo autor é
+0,3–1,0; o padrão local é 0,7. Veja [KREA2.md](KREA2.md).
+
+SeedVR2 é generativo: em edição ele roda antes do composite da cabeça; se
+falhar, o fallback é Lanczos.
 
 ## Não incluído no fluxo vencedor
 
@@ -53,5 +66,6 @@ roda antes do composite da cabeça; se falhar, o fallback é Lanczos.
 | 4x-UltraSharpV2 | removido do instalador de produção por licença não comercial |
 | PuLID-Flux2 não oficial | não usado; integração/pesos não demonstraram carga válida |
 
-Pesos antigos podem permanecer no disco para experimentação, mas não são
-carregados pelo CLI/MCP vencedor.
+Os pesos descartados foram removidos da instalação ativa. A cópia BF16 do
+Z-Image no ComfyUI também não é necessária: o workflow visual chama o mesmo
+Draw Things i8x usado pelo CLI/MCP.

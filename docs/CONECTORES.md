@@ -48,6 +48,35 @@ Crie um conector local/stdio ou acrescente ao array `connectors` de
 
 Feche o app antes de editar o arquivo e reinicie depois.
 
+## OpenCode
+
+Na versão instalada nesta máquina, `~/.config/opencode/opencode.json` usa:
+
+```json
+{
+  "mcp": {
+    "foto-macos": {
+      "type": "local",
+      "command": [
+        "/Users/matheusbgodoi/comfyui/.venv/bin/python",
+        "/Users/matheusbgodoi/src/foto-macos/src/mcp_server.py"
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
+Confirme com `opencode mcp list`. OpenCode V2 mais novo move servidores para
+`mcp.servers`; use o schema aceito pelo binário instalado.
+
+## Pi
+
+Pi não possui cliente MCP embutido. O adaptador nativo versionado em
+`integrations/pi/index.ts` chama os mesmos CLIs Python do MCP. A instalação
+global desta máquina aponta `~/.pi/agent/extensions/local-photo/index.ts` para
+esse arquivo, preservando o alias antigo `image_generate`.
+
 ## Ferramentas
 
 | ferramenta | uso |
@@ -58,9 +87,19 @@ Feche o app antes de editar o arquivo e reinicie depois.
 | `foto_ampliar` | SeedVR2/MLX; Lanczos se o modelo falhar |
 | `foto_referencias` | corrige orientação e cria crops de rosto |
 | `foto_status` | testa ComfyUI e modelos |
+| `civitai_modelo` | consulta base, arquivos, trigger words e hashes |
+| `civitai_baixar` | download autenticado com verificação SHA-256 |
 
-O ComfyUI precisa estar ativo para editar, compor referências e usar os
-backends Comfy. Geração via Draw Things e upscale via MLX são independentes.
+## Credencial do Civitai
+
+O token fica uma única vez no Keychain do macOS, serviço `civitai-api`. Ele
+nunca aparece nos JSON/TOML dos agentes, argumentos de processo ou repositório.
+Todos os clientes usam as ferramentas Civitai do mesmo MCP/adaptador Pi.
+
+Para `foto_editar` e `foto_cena`, o MCP inicia o ComfyUI local automaticamente
+e usa uma trava compartilhada para clientes concorrentes não abrirem processos
+duplicados. Geração via Draw Things/Krea e upscale via MLX são independentes.
+Se preferir subir o serviço manualmente:
 
 ```bash
 cd ~/comfyui
