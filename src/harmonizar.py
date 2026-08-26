@@ -352,3 +352,127 @@ def seam_profile(img, mask, hf_sigma=1.2, bins=None):
         s = (sd >= bins[i]) & (sd < bins[i + 1])
         prof.append((int(bins[i]), round(mad_sigma(hf, s.astype(np.float32)), 3), int(s.sum())))
     return prof
+
+
+# ------------------------------------------------- (0) DERIVA GLOBAL DO VAE
+
+def restore_global_tone(E, O, sigma_lf=6.0, iters=6, clamp_gain=(0.8, 1.25),
+                        clamp_off=(8.0, 6.0, 6.0)):
+    """Desfaz a deriva de tom/WB que o VAE do modelo de edicao aplica no quadro
+    INTEIRO. Medido neste pipeline, num canto de FUNDO que ninguem pediu para
+    mudar:  original L=47.44 -> depois do Mage L=41.70  (-5.7 L).
+    O polimento SDXL nao tem culpa (41.70 -> 41.03).
+
+    Ajusta, por canal Lab, uma afim  E' = g*E + o  com IRLS de Huber sobre os
+    pixels que NAO mudaram (a roupa nova vira outlier e e rejeitada sozinha).
+    Uma afim global e monotona: nao pode desfazer a edicao pedida, so o tom.
+
+    Faca isto LOGO APOS o estagio de edicao. Com o quadro ja no tom certo, a
+    correcao de cor local da cabeca cai de ~5.6 dL para quase zero — e o rosto
+    fica com a cor da FOTO, nao com a cor errada que o VAE inventou.
+    """
+    lo = cv2.cvtColor(np.clip(_g(O, sigma_lf), 0, 255) / 255.0, cv2.COLOR_RGB2LAB)
+    le = cv2.cvtColor(np.clip(_g(E, sigma_lf), 0, 255) / 255.0, cv2.COLOR_RGB2LAB)
+    step = max(1, int(min(O.shape[:2]) / 400))
+    xs = le[::step, ::step].reshape(-1, 3)
+    ys = lo[::step, ::step].reshape(-1, 3)
+    out = cv2.cvtColor(np.clip(E, 0, 255) / 255.0, cv2.COLOR_RGB2LAB)
+    info = []
+    for c in range(3):
+        x, y = xs[:, c], ys[:, c]
+        wgt = np.ones_like(x)
+        g, o_ = 1.0, 0.0
+        for _ in range(iters):
+            A = np.stack([x, np.ones_like(x)], 1) * np.sqrt(wgt)[:, None]
+            coef = np.linalg.lstsq(A, y * np.sqrt(wgt), rcond=None)[0]
+            g, o_ = float(coef[0]), float(coef[1])
+            r = y - (g * x + o_)
+            s = max(float(np.median(np.abs(r)) * 1.4826), 1e-3)
+            wgt = np.clip(1.345 * s / np.maximum(np.abs(r), 1e-6), 0, 1)
+        g = float(np.clip(g, *clamp_gain))
+        o_ = float(np.clip(o_, -clamp_off[c], clamp_off[c]))
+        info.append((round(g, 4), round(o_, 3), round(float(wgt.mean()), 3)))
+        out[..., c] = out[..., c] * g + o_
+    return np.clip(cv2.cvtColor(out, cv2.COLOR_LAB2RGB) * 255.0, 0, 255).astype(np.float32), info
+
+
+# ------------------------------------- composicao por banda com rho por banda
+
+def band_rho(O, E, ring, steps=(0.8, 1.3, 2.6, 5.2)):
+    """Correlacao entre as duas fontes por banda, medida no anel.
+
+    Medido no par real: [0.44, 0.66, 0.84, 0.91]. Leitura: nas bandas grossas a
+    alta frequencia e ESTRUTURA compartilhada (a mesma orelha, o mesmo fio de
+    cabelo) — alpha blend ja preserva. Na banda mais fina (~1 px) e RUIDO
+    INDEPENDENTE — e so ali que o alpha blend derruba a variancia. Por isso a
+    correcao tem que ser por banda, nao global."""
+    s = ring > 0.05
+    bo, _ = dog_stack(O.mean(2), steps)
+    be, _ = dog_stack(E.mean(2), steps)
+    out = []
+    for a, b in zip(bo, be):
+        va, vb = a[s], b[s]
+        if va.size < 64 or va.std() < 1e-6 or vb.std() < 1e-6:
+            out.append(1.0)
+        else:
+            out.append(float(np.clip(np.corrcoef(va, vb)[0, 1], 0.0, 1.0)))
+    return out
+
+
+def composite_banded(O, E, mask_soft, ring=None, steps=(0.8, 1.3, 2.6, 5.2), rhos=None):
+    """Compoe banda a banda: LF com alpha normal, cada banda de HF com o fator
+    de preservacao de variancia proprio (rho medido no anel)."""
+    a = mask_soft[..., None].astype(np.float32)
+    if rhos is None:
+        rhos = band_rho(O, E, ring if ring is not None else ring_weights(mask_soft > 0.5), steps)
+    bo, base_o = dog_stack(O.astype(np.float32), steps)
+    be, base_e = dog_stack(E.astype(np.float32), steps)
+    out = base_o * a + base_e * (1 - a)
+    for k in range(len(bo)):
+        out = out + blend_hf(bo[k], be[k], a, rhos[k])
+    return np.clip(out, 0, 255).astype(np.float32), rhos
+
+
+# ------------------------------------------------------------- API de alto nivel
+
+def harmonize_and_composite(O, E, mask_hard, feather_px=22, order=1,
+                            global_tone=True, seed=0, verbose=False):
+    """Pipeline completo de harmonizacao + composicao. O e E em RGB float32
+    0..255, MESMO tamanho. mask_hard = 0/1 float (a cabeca).
+
+    ORDEM (e o porque de cada passo estar onde esta):
+      0. tom global   corrige a deriva do VAE no quadro inteiro. Tem que vir
+                      antes de tudo: e um erro GLOBAL, e so da pra corrigir
+                      enquanto ainda e global. Depois de compor vira "metade do
+                      quadro certa, metade errada" e nao ha correcao global que
+                      resolva.
+      1. cor local    campo LF ajustado no anel. Vem antes de nitidez/grao
+                      porque so mexe em LF: e a unica das tres que nao
+                      perturba a medida das outras duas. Se viesse depois,
+                      qualquer ganho de contraste que ela aplicasse
+                      reescalaria o grao recem-casado.
+      2. nitidez      ganho por banda, com o grao ainda no nivel original —
+                      medir nitidez DEPOIS de injetar grao mediria o grao.
+      3. grao         por ultimo entre as harmonizacoes, porque preenche
+                      exatamente o que sobrou dos passos 1 e 2 (o deficit do
+                      clip). Injetar antes seria estimar um alvo que os passos
+                      seguintes ainda vao mudar.
+      4. compor       banda a banda, com preservacao de variancia por banda.
+    Um passo 5 (grao GLOBAL, o grao.py atual) continua valendo DEPOIS disto,
+    agora sobre uma imagem homogenea: ele passa a medir um deficit real do
+    quadro todo em vez de medir o degrau que ele mesmo deveria consertar.
+    """
+    log = {}
+    if global_tone:
+        E, log["tone"] = restore_global_tone(E, O)
+    ring = change_guard(O, E, ring_weights(mask_hard, feather_px=feather_px))
+    O, log["color"] = match_color_lf(O, E, mask_hard, feather_px=feather_px, order=order)
+    O, log["gains"], deficit = match_sharpness_fast(O, E, mask_hard)
+    log["deficit"] = [round(v, 3) for v in deficit]
+    O = inject_band_noise(O, mask_hard, deficit, seed=seed)
+    soft = _g(mask_hard.astype(np.float32), feather_px * 0.75)
+    out, log["rho"] = composite_banded(O, E, soft, ring)
+    if verbose:
+        for k, v in log.items():
+            print(f"  [harm] {k}: {v}")
+    return out, log

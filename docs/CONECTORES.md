@@ -35,12 +35,34 @@ rodando dentro da pasta do projeto.
 
 Conferir: `claude mcp list` deve mostrar `foto-edit … ✔ Connected`.
 
-### CRIAs AI
+### CRIAs AI / Local Studio
 
-`Configure → Integrations → Connectors → + New connector`, tipo **stdio**:
+Pela interface: `Configure → Integrations → Connectors → + New connector`. No
+campo **TRANSPORT**, troque de "Remote HTTP endpoint" para o modo **stdio /
+Local MCP process** — o formulário muda e passa a pedir *command* e *args* em
+vez de *MCP endpoint*. Preencha:
 
 - **Command:** `/Users/matheusbgodoi/comfyui/.venv/bin/python`
 - **Args:** `/Users/matheusbgodoi/src/foto-macos/src/mcp_server.py`
+
+Ou direto no arquivo, que é mais rápido — feche o app antes, senão ele
+sobrescreve ao sair:
+
+`~/Library/Application Support/Local Studio/connectors.json`
+
+```json
+{
+  "id": "foto-edit",
+  "name": "Foto Edit (ComfyUI)",
+  "transport": "stdio",
+  "command": "/Users/matheusbgodoi/comfyui/.venv/bin/python",
+  "args": ["/Users/matheusbgodoi/src/foto-macos/src/mcp_server.py"],
+  "env": {},
+  "enabled": true
+}
+```
+
+Acrescente esse objeto ao array `connectors` e reinicie o app.
 
 ### Codex
 
