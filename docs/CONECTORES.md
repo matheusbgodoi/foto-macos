@@ -1,59 +1,43 @@
-# Conectar aos agentes (CRIAs AI, Claude Code, Codex)
+# Conectar aos agentes
 
-## Quem é quem
+Existe um único servidor público: **`foto-macos`**. Ele expõe geração, edição,
+referências e upscale e roteia internamente entre ComfyUI, Draw Things e MLX.
+O antigo `local-photo` pode continuar instalado como dependência interna, mas
+não deve ser registrado como segundo MCP.
 
-Existem **dois** servidores locais de imagem, e eles fazem coisas diferentes.
-Confundir os dois é fácil — o nome de ambos começa com "photo/foto".
+Comando stdio:
 
-| conector | faz | motor | quando usar |
-|---|---|---|---|
-| **`local-photo`** ("Local Photo AI") | **gera** imagem do zero, a partir de texto | Draw Things + Z-Image | "crie uma foto de um café ao entardecer" |
-| **`foto-edit`** (este repositório) | **edita** uma foto que já existe, preservando o rosto real | ComfyUI + Mage-Flow-Edit | "troque a camiseta desta foto minha por um moletom preto" |
-
-Regra prática: **não existe foto de entrada → `local-photo`. Existe foto de
-entrada → `foto-edit`.**
-
----
-
-## Registrar
-
-O comando é o mesmo nos três clientes — muda só onde você cola.
-
-```
-~/comfyui/.venv/bin/python ~/src/foto-macos/src/mcp_server.py
+```text
+/Users/matheusbgodoi/comfyui/.venv/bin/python /Users/matheusbgodoi/src/foto-macos/src/mcp_server.py
 ```
 
-### Claude Code
+## Claude Code
 
 ```bash
-claude mcp add --scope user foto-edit -- \
+claude mcp add --scope user foto-macos -- \
   ~/comfyui/.venv/bin/python ~/src/foto-macos/src/mcp_server.py
+claude mcp list
 ```
 
-Use `--scope user`, senão o conector só funciona quando o Claude Code está
-rodando dentro da pasta do projeto.
+## Codex
 
-Conferir: `claude mcp list` deve mostrar `foto-edit … ✔ Connected`.
+Em `~/.codex/config.toml`:
 
-### CRIAs AI / Local Studio
+```toml
+[mcp_servers.foto-macos]
+command = "/Users/matheusbgodoi/comfyui/.venv/bin/python"
+args = ["/Users/matheusbgodoi/src/foto-macos/src/mcp_server.py"]
+```
 
-Pela interface: `Configure → Integrations → Connectors → + New connector`. No
-campo **TRANSPORT**, troque de "Remote HTTP endpoint" para o modo **stdio /
-Local MCP process** — o formulário muda e passa a pedir *command* e *args* em
-vez de *MCP endpoint*. Preencha:
+## CRIAs AI / Local Studio
 
-- **Command:** `/Users/matheusbgodoi/comfyui/.venv/bin/python`
-- **Args:** `/Users/matheusbgodoi/src/foto-macos/src/mcp_server.py`
-
-Ou direto no arquivo, que é mais rápido — feche o app antes, senão ele
-sobrescreve ao sair:
-
-`~/Library/Application Support/Local Studio/connectors.json`
+Crie um conector local/stdio ou acrescente ao array `connectors` de
+`~/Library/Application Support/Local Studio/connectors.json`:
 
 ```json
 {
-  "id": "foto-edit",
-  "name": "Foto Edit (ComfyUI)",
+  "id": "foto-macos",
+  "name": "Foto MacOS — Gerar e Editar",
   "transport": "stdio",
   "command": "/Users/matheusbgodoi/comfyui/.venv/bin/python",
   "args": ["/Users/matheusbgodoi/src/foto-macos/src/mcp_server.py"],
@@ -62,52 +46,27 @@ sobrescreve ao sair:
 }
 ```
 
-Acrescente esse objeto ao array `connectors` e reinicie o app.
+Feche o app antes de editar o arquivo e reinicie depois.
 
-### Codex
+## Ferramentas
 
-No `~/.codex/config.toml`:
+| ferramenta | uso |
+|---|---|
+| `foto_gerar` | imagem do zero; roteamento automático por estilo/LoRA |
+| `foto_cena` | nova composição com 1–4 referências via FLUX.2 |
+| `foto_editar` | altera foto existente e preserva a cabeça original |
+| `foto_ampliar` | SeedVR2/MLX; Lanczos se o modelo falhar |
+| `foto_referencias` | corrige orientação e cria crops de rosto |
+| `foto_status` | testa ComfyUI e modelos |
 
-```toml
-[mcp_servers.foto-edit]
-command = "/Users/matheusbgodoi/comfyui/.venv/bin/python"
-args = ["/Users/matheusbgodoi/src/foto-macos/src/mcp_server.py"]
-```
-
----
-
-## Ferramentas expostas
-
-| ferramenta | o que faz | tempo |
-|---|---|---|
-| `foto_editar` | edita por instrução, preservando o rosto | ~3 min |
-| `foto_ampliar` | SeedVR2 2× | ~26 s |
-| `foto_referencias` | corrige orientação e recorta o rosto em 1024 px | segundos |
-| `foto_status` | ComfyUI está no ar? modelos instalados? | instantâneo |
-
-O `foto_editar` roda o pipeline de cinco estágios inteiro — não é preciso
-orquestrar as etapas na mão.
-
----
-
-## Pré-requisito
-
-O ComfyUI precisa estar no ar:
+O ComfyUI precisa estar ativo para editar, compor referências e usar os
+backends Comfy. Geração via Draw Things e upscale via MLX são independentes.
 
 ```bash
-cd ~/comfyui && ./.venv/bin/python main.py \
-  --use-pytorch-cross-attention --reserve-vram 2 --listen 127.0.0.1
+cd ~/comfyui
+./.venv/bin/python main.py --use-pytorch-cross-attention \
+  --reserve-vram 2 --listen 127.0.0.1
 ```
 
-Se não estiver, todas as ferramentas devolvem uma mensagem dizendo isso, com o
-comando para subir — em vez de falharem de forma obscura. `foto_status` também
-lista quais modelos estão faltando.
-
-## Variáveis de ambiente
-
-| variável | padrão | para quê |
-|---|---|---|
-| `COMFYUI_DIR` | `~/comfyui` | onde está o ComfyUI |
-| `COMFYUI_URL` | `http://127.0.0.1:8188` | endereço da API |
-| `FOTO_PYTHON` | `$COMFYUI_DIR/.venv/bin/python` | interpretador dos scripts |
-| `FOTO_OUT` | `<repo>/out` | onde ficam os intermediários |
+Variáveis: `COMFYUI_DIR`, `COMFYUI_URL`, `FOTO_PYTHON`, `FOTO_OUT`,
+`LOCAL_PHOTO_BIN`, `DRAWTHINGS_BIN` e `DRAWTHINGS_MODELS_DIR`.

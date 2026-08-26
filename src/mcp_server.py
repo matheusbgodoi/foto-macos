@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Servidor MCP do foto-macos — edicao e geracao de imagem local.
 
-Sobrepoe em parte o MCP `local-photo` (Draw Things + Z-Image), que so gera do
-zero. Este aqui gera E edita, e na edicao preserva o rosto real da pessoa.
+Este e o unico conector publico. Ele roteia geracao e edicao entre ComfyUI,
+Draw Things e MLX; o usuario nao precisa conhecer o backend.
 
 Registrar no Claude Code:
-    claude mcp add foto-edit -- ~/comfyui/.venv/bin/python \\
+    claude mcp add --scope user foto-macos -- ~/comfyui/.venv/bin/python \\
         ~/src/foto-macos/src/mcp_server.py
 
 Registrar no CRIAs AI / Codex: novo conector "stdio" com o mesmo comando.
@@ -15,6 +15,7 @@ Precisa do ComfyUI no ar em 127.0.0.1:8188 — use a ferramenta foto_status.
 import os
 import subprocess
 import sys
+import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,10 +33,9 @@ app = MCPServer(
     instructions=(
         "Edicao de foto local por instrucao, preservando o rosto real da pessoa. "
         "foto_editar altera uma foto QUE JA EXISTE (trocar roupa, remover objeto, "
-        "trocar fundo) preservando o rosto real. foto_gerar cria imagem do zero a "
-        "partir de texto, com SDXL e LoRAs de estilo. "
-        "Limite conhecido: nao coloca uma pessoa numa cena nova a partir de uma "
-        "selfie — o rosto sairia parecido, nao identico."
+        "trocar fundo) preservando o rosto real. foto_gerar cria imagem do zero "
+        "e escolhe automaticamente o motor Apple mais adequado. foto_cena usa "
+        "uma ou mais imagens de referencia para criar uma composicao nova."
     ),
 )
 
@@ -87,7 +87,7 @@ def foto_editar(
             Keep his face, hair, hands and the background unchanged."
         saida: caminho do arquivo final. Vazio = <foto>_editada.png.
         evitar: prompt negativo, ex: "logo, text, changed face".
-        ampliar: aplica SeedVR2 2x no fim (+26 s).
+        ampliar: aplica SeedVR2 2x antes de recolar a cabeca (+26 s).
         sem_cabeca: desliga a preservacao do rosto. Use so se a pose ou o
             enquadramento mudarem — nesses casos recolar a cabeca nao faz sentido.
         seed: 0 = aleatoria.
@@ -120,9 +120,6 @@ def foto_editar(
 @app.tool(description="Amplia uma imagem com SeedVR2, reconstruindo microtextura real. ~26 s para 2x.")
 def foto_ampliar(imagem: str, saida: str = "", escala: float = 2.0) -> str:
     """Amplia e devolve o caminho do resultado."""
-    erro = _exige_comfy()
-    if erro:
-        return erro
     img = os.path.abspath(os.path.expanduser(imagem))
     destino = os.path.abspath(os.path.expanduser(
         saida or os.path.splitext(img)[0] + "_2x.png"))
@@ -146,45 +143,84 @@ def foto_referencias(fotos: list[str]) -> str:
 
 @app.tool(
     description=(
-        "Cria uma imagem DO ZERO a partir de texto, com SDXL. Aceita LoRAs de estilo "
-        "(desenho, anime, fotografia, produto) — o ecossistema SDXL tem dezenas de "
-        "milhares delas. ~50 s a 1 MP. Para EDITAR uma foto existente use foto_editar."
+        "Cria uma imagem DO ZERO e escolhe o motor automaticamente: Draw Things + "
+        "Z-Image para fotografia/estilos rapidos; ComfyUI + SDXL quando uma LoRA SDXL "
+        "for fornecida; FLUX.2 quando explicitamente pedido. Para editar uma foto "
+        "existente use foto_editar; para varias referencias use foto_cena."
     )
 )
 def foto_gerar(
     prompt: str,
     saida: str = "",
     tamanho: str = "1024x1024",
-    steps: int = 25,
-    cfg: float = 5.0,
     seed: int = 0,
+    estilo: str = "auto",
+    motor: str = "auto",
     loras: list[str] | None = None,
 ) -> str:
     """Gera a imagem e devolve o caminho.
 
     Args:
-        prompt: descricao da cena, em ingles funciona melhor.
+        prompt: descricao da imagem; portugues e aceito.
         saida: caminho do arquivo final.
-        tamanho: "LARGURAxALTURA". SDXL rende melhor perto de 1 MP.
-        steps: 25 e um bom padrao; abaixo de 15 perde detalhe.
-        cfg: 5.0. Acima de 8 satura e endurece a pele.
+        tamanho: "LARGURAxALTURA"; perto de 1 MP e o melhor custo/qualidade.
         seed: 0 = aleatoria.
-        loras: nomes de arquivo em models/loras, opcionalmente "nome:forca".
+        estilo: auto, foto-natural, iphone, profissional, produto, cartoon,
+            pixel-art, ilustracao, anime ou livre.
+        motor: auto, drawthings, sdxl ou flux2. Deixe auto normalmente.
+        loras: LoRAs SDXL em models/loras, opcionalmente "nome:forca". Quando
+            presentes, o roteador seleciona SDXL.
     """
-    erro = _exige_comfy()
-    if erro:
-        return erro
-    args = [prompt, "--tamanho", tamanho, "--steps", steps, "--cfg", cfg]
-    if saida:
-        args += ["--saida", os.path.abspath(os.path.expanduser(saida))]
+    destino = os.path.abspath(os.path.expanduser(saida or os.path.join(
+        "~/Downloads", f"foto_{int(time.time())}.png")))
+    args = [prompt, "--tamanho", tamanho, "--estilo", estilo,
+            "--motor", motor, "--saida", destino]
     if seed:
         args += ["--seed", seed]
     for l in (loras or []):
         args += ["--lora", l]
-    txt, rc = _rodar("gerar.py", args)
-    if rc != 0:
+    txt, rc = _rodar("gerar_coringa.py", args)
+    if rc != 0 or not os.path.exists(destino):
         return f"falhou:\n{txt[-1200:]}"
-    return txt.strip().splitlines()[-1]
+    return f"{destino}\n\n{txt[-600:]}"
+
+
+@app.tool(
+    description=(
+        "Cria uma CENA NOVA usando 1-4 imagens como referencias de pessoa, roupa, "
+        "objeto ou estilo. Usa FLUX.2 Klein 4B multi-reference. Diferente de "
+        "foto_editar: a composicao e a pose podem mudar. A identidade e zero-shot; "
+        "confira o rosto antes de uso sensivel."
+    )
+)
+def foto_cena(
+    prompt: str,
+    referencias: list[str],
+    saida: str = "",
+    tamanho: str = "896x1216",
+    seed: int = 0,
+) -> str:
+    """Gera uma composicao nova a partir de varias referencias."""
+    erro = _exige_comfy()
+    if erro:
+        return erro
+    if not referencias:
+        return "forneca pelo menos uma imagem em referencias"
+    refs = [os.path.abspath(os.path.expanduser(path)) for path in referencias[:4]]
+    faltando = [path for path in refs if not os.path.exists(path)]
+    if faltando:
+        return "nao encontrei: " + ", ".join(faltando)
+    destino = os.path.abspath(os.path.expanduser(saida or os.path.join(
+        "~/Downloads", f"cena_{int(time.time())}.png")))
+    args = [prompt, "--tamanho", tamanho, "--saida", destino]
+    for path in refs:
+        args += ["--ref", path]
+    if seed:
+        args += ["--seed", seed]
+    txt, rc = _rodar("flux2.py", args)
+    if rc != 0 or not os.path.exists(destino):
+        return f"falhou:\n{txt[-1400:]}"
+    return f"{destino}\n\n{txt[-600:]}"
 
 
 @app.tool(description="Verifica se o ComfyUI esta no ar e quais modelos do pipeline estao instalados.")
@@ -197,10 +233,19 @@ def foto_status() -> str:
         "vae": f"{m}/vae/mage_flow_vae_bf16.safetensors",
         "polir": f"{m}/checkpoints/RealVisXL_V5.0_fp16.safetensors",
         "pele": f"{m}/upscale_models/1x-ITF-SkinDiffDetail-Lite-v1.pth",
+        "gerar/referencias": f"{m}/diffusion_models/flux-2-klein-4b.safetensors",
     }
     linhas = [f"ComfyUI em {COMFY}: {'no ar' if _comfy_ok() else 'FORA DO AR'}"]
     for k, v in precisa.items():
         linhas.append(f"  {'ok   ' if os.path.exists(v) else 'FALTA'} {k}: {os.path.basename(v)}")
+    draw_cli = os.path.expanduser(os.environ.get(
+        "DRAWTHINGS_BIN", "/opt/homebrew/bin/draw-things-cli"))
+    draw_model = os.path.expanduser(os.path.join(os.environ.get(
+        "DRAWTHINGS_MODELS_DIR",
+        "~/Library/Application Support/local-photo-ai-m5/models"),
+        "z_image_turbo_1.0_i8x.ckpt"))
+    draw_ok = os.path.isfile(draw_cli) and os.path.isfile(draw_model)
+    linhas.append(f"  {'ok   ' if draw_ok else 'opcional ausente'} gerar rapido: Draw Things + Z-Image i8x")
     return "\n".join(linhas)
 
 

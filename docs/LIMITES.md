@@ -1,95 +1,69 @@
 # Limites honestos
 
-O que este pipeline **não** faz, e por quê. Escrito para poupar seu tempo.
+## Editar não é o mesmo que recriar
 
----
+`foto editar` e `foto vestir` trabalham sobre a fotografia original. Quando a
+cabeça fica na mesma posição, o pipeline recoloca os pixels reais por
+segmentação do Vision.framework e blend multi-banda. Isso dá preservação muito
+mais forte que pedir ao modelo para “não mudar o rosto”.
 
-## Não gera "você" numa cena nova
+Esse método não se aplica quando pose, ângulo ou enquadramento da cabeça mudam.
+Nesses casos use `foto cena` e aceite a natureza zero-shot da identidade.
 
-Você manda uma selfie e pede "eu sentado num café". A cena sai excelente, a
-roupa sai certa, e **o rosto não é o seu** — é alguém parecido, com o cabelo
-errado.
+## Identidade em uma cena nova
 
-Isso não é ajuste de prompt nem de parâmetro. Modelos de edição por instrução
-leem a referência como *descrição de pessoa*, não como identidade. Eles
-recriam alguém compatível com a descrição.
+FLUX.2 Klein aceita várias referências e, no teste com rosto + corpo + roupa,
+produziu uma pessoa coerente, com roupa e anatomia corretas. Ainda assim, o
+resultado é uma síntese das referências, não uma cópia biométrica garantida.
+Compare rosto, cabelo, óculos, mãos e acessórios antes de publicar.
 
-### Por que não dá para resolver com um adapter
+Não há promessa de “pixel idêntico” quando a cena é criada do zero: não existem
+pixels de origem na nova pose para preservar.
 
-Adapters de identidade zero-shot — PuLID, InstantID, InfiniteYou, IP-Adapter
-FaceID, PhotoMaker, USO, DreamO, UNO — foram feitos para **FLUX.1 e SDXL**, uma
-geração atrás. Não existe nenhum para Mage-Flow, Qwen-Image-Edit-2511, Z-Image
-ou FLUX.2 klein.
+## Anomalias locais
 
-O único que **alega** suportar FLUX.2 klein (`Fayens/Pulid-Flux2` +
-`iFayens/ComfyUI-PuLID-Flux2`) está **quebrado por construção**: os pesos trazem
-84 tensores com prefixo `pulid_ca_double` / `pulid_ca_single` (dim 4096), o
-código declara os módulos como `self.double_ca` / `self.single_ca`, e carrega com
-`load_state_dict(state, strict=False)` sem nenhum remapeamento de chave. Toda a
-camada de injeção de identidade é **descartada em silêncio** e fica com
-inicialização aleatória. No klein 4B (hidden 3072 ≠ 4096) ele ainda constrói um
-injetor novo com `nn.init.normal_(std=0.02)`.
+Qualquer modelo pode inventar relógio, cinto, dedos, texto ou detalhes da roupa.
+Prompt negativo quase não ajuda nos modelos distilled com CFG 1. A abordagem
+mais segura é:
 
-Se você usou isso e viu membros a mais e roupa derretida: é o resultado
-matemático esperado de somar ruído gaussiano no residual de cada bloco.
+1. pedir explicitamente o que deve permanecer;
+2. gerar rascunho em ~1 MP;
+3. inspecionar rosto, mãos, pulsos, acessórios e texto;
+4. fazer uma edição localizada se necessário;
+5. ampliar somente o resultado aprovado.
 
-### Rotas que restam
+## Upscale não transforma uma geração ruim em foto real
 
-| rota | veredito |
-|---|---|
-| **Editar uma foto sua existente** | é o que este pipeline faz, e funciona |
-| **LoRA treinada no rosto** | único método confiável — mas precisa de 20–30 fotos, e treinar difusão em MPS tem bug de **falha silenciosa** em todas as rotas testadas (gasta horas e entrega um arquivo que carrega e não faz nada) |
-| **API fechada** | quando identidade importa mais que rodar local |
+SeedVR2 adiciona microtextura plausível, mas é generativo e pode alterar traços.
+No fluxo de edição ele toca somente a imagem editada e a cabeça original é
+recolocada depois. Para preservar tudo estritamente, não use `--ampliar`; use o
+arquivo na resolução nativa ou Lanczos.
 
----
+Em fontes pequenas (por exemplo, JPEG de WhatsApp com 640 px), ampliar o quadro
+generativamente e a cabeça por Lanczos cria diferença visível de nitidez. O
+resultado recomendado é o nativo; resolução perdida na origem não pode ser
+recuperada sem alguma invenção.
 
-## Inventa acessórios na área que redesenha
+## Estilos
 
-Medido: ao trocar uma roupa, o modelo moveu o relógio para o pulso errado,
-adicionou um cinto que não existia, e numa tentativa colocou relógio nos **dois**
-pulsos.
+Os presets resolvem estilos amplos por prompt. Estilos muito específicos — um
+artista, personagem, produto ou linguagem visual consistente — normalmente
+exigem uma LoRA/checkpoint SDXL compatível. O roteador muda para SDXL quando
+`--lora` é fornecido.
 
-**Prompt negativo não resolve.** Com CFG 1 — regime distilled/turbo, que é o que
-torna 4 steps viáveis — o negativo é essencialmente ignorado. Pagar CFG real
-dobra o custo por step e, medido aqui, **não melhora a qualidade**.
+## Desempenho
 
-O que funciona hoje: descrever explicitamente o que **preservar** no prompt
-positivo, e uma segunda passada dedicada a remover o que apareceu de errado.
+24 GB de memória unificada são suficientes para os modelos 4B escolhidos, mas
+pressão de memória causa grande variação. Evite rodar outros modelos ou tarefas
+pesadas em paralelo. O primeiro uso também paga o carregamento dos pesos.
 
----
+Draw Things não foi desinstalado porque o runtime Metal quantizado i8x é mais
+rápido e econômico para geração. ComfyUI continua indispensável para edição,
+workflows visuais e multi-referência. O sistema unifica a interface, não força
+um único runtime a ser pior em todas as tarefas.
 
-## Não é indistinguível sob inspeção próxima
+## Privacidade e segurança
 
-O estágio de polimento aproxima muito a microtextura da original (5,71 → 4,73 →
-**5,61** de ruído de alta frequência na região editada). Mas a peça gerada nunca
-tem a *história* de uma peça real: a trama irregular, o amassado assimétrico, o
-fiapo.
-
-Num relance, ou numa tela de celular, passa. Ampliado na peça editada,
-distingue-se.
-
----
-
-## Perde do ChatGPT em algumas dimensões
-
-Sem torcida:
-
-| dimensão | quem ganha |
-|---|---|
-| preservar o que não foi editado | **local** — nenhuma ferramenta web dá esse controle |
-| realismo de pele | empate ou **local** (o GPT-Image é plastificado) |
-| aderência a prompt complexo | **GPT-Image**, com folga |
-| texto dentro da imagem | **GPT-Image** |
-| velocidade | **GPT-Image** — ~1 s numa GPU dedicada contra ~2 min aqui |
-
----
-
-## Restrições de hardware
-
-24 GB de memória unificada dão ~16–18 GB úteis. Consequências práticas:
-
-- o mesmo trabalho varia de **44 s a 156 s** conforme a pressão de memória;
-- com outra coisa pesada rodando, o tempo **triplica** (um upscale de 183 s
-  chegou a 909 s competindo com um download);
-- o primeiro uso após ligar o ComfyUI paga ~40 s a mais para carregar o modelo;
-- modelos de 20B só cabem quantizados, e aí ficam lentos demais para iterar.
+O fluxo é local. Mesmo assim, imagens sintéticas de pessoas podem ser usadas de
+forma enganosa. Obtenha consentimento de terceiros e não trate semelhança
+visual como autenticação de identidade.

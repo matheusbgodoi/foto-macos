@@ -1,80 +1,57 @@
-# Modelos
+# Modelos e runtimes
 
-Total ~25 GB. Todos os caminhos são relativos a `~/comfyui/models/`.
+O projeto usa modelos especializados. Os links abaixo são as origens dos pesos;
+confira a licença de cada versão antes de redistribuir ou usar comercialmente.
 
-## Estágio 1 — editar
+## ComfyUI
 
-| arquivo | tamanho | destino | origem |
-|---|---|---|---|
-| `mage_flow_edit_turbo_bf16.safetensors` | 7,7 GB | `diffusion_models/` | [Comfy-Org/Mage-Flow](https://huggingface.co/Comfy-Org/Mage-Flow) |
-| `qwen3vl_4b_bf16.safetensors` | 8,3 GB | `text_encoders/` | idem |
-| `mage_flow_vae_bf16.safetensors` | 0,33 GB | `vae/` | idem |
+Todos os caminhos são relativos a `~/comfyui/models/`.
 
-**Mage-Flow-Edit-Turbo** (Microsoft, 4B, MIT) é o editor por instrução. Suporte
-**nativo** no ComfyUI ≥ 0.33 — nenhum custom node necessário. O nó
-`TextEncodeMageFlowEdit` aceita até 16 imagens de referência e devolve
-`positive`, `negative` e o `latent` já no tamanho certo.
+| papel | arquivo | tamanho aproximado | origem |
+|---|---|---:|---|
+| editar foto | `diffusion_models/mage_flow_edit_turbo_bf16.safetensors` | 7,7 GB | [Comfy-Org/Mage-Flow](https://huggingface.co/Comfy-Org/Mage-Flow) |
+| encoder Mage | `text_encoders/qwen3vl_4b_bf16.safetensors` | 8,3 GB | [Comfy-Org/Mage-Flow](https://huggingface.co/Comfy-Org/Mage-Flow) |
+| VAE Mage | `vae/mage_flow_vae_bf16.safetensors` | 0,33 GB | [Comfy-Org/Mage-Flow](https://huggingface.co/Comfy-Org/Mage-Flow) |
+| gerar/cena multi-ref | `diffusion_models/flux-2-klein-4b.safetensors` | ~8 GB | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) |
+| encoder FLUX.2 | `text_encoders/qwen_3_4b.safetensors` | ~8 GB | [Comfy-Org/z_image_turbo](https://huggingface.co/Comfy-Org/z_image_turbo) |
+| VAE FLUX.2 | `vae/flux2-vae.safetensors` | ~0,3 GB | [Comfy-Org/flux2-dev](https://huggingface.co/Comfy-Org/flux2-dev) |
+| gerar SDXL/polir | `checkpoints/RealVisXL_V5.0_fp16.safetensors` | 6,5 GB | [SG161222/RealVisXL_V5.0](https://huggingface.co/SG161222/RealVisXL_V5.0) |
+| textura | `upscale_models/1x-ITF-SkinDiffDetail-Lite-v1.pth` | 19 MB | [OpenModelDB](https://openmodeldb.info/models/1x-ITF-SkinDiffDetail-Lite-v1) |
 
-Por que ele e não os 20B: as referências são redimensionadas para a resolução de
-saída antes de entrar no RoPE, o que segura o drift. E, medido aqui, ele é 4×
-mais rápido que o Qwen-Image-Edit-2511 **e** preserva mais da foto original.
+Mage-Flow é o editor da foto-base; FLUX.2 Klein é o modelo unificado de geração
+e multi-referência. RealVisXL serve ao ecossistema SDXL/LoRA e ao polimento de
+denoise 0,03.
 
-Variantes opcionais do mesmo repo: `mage_flow_edit_bf16` (30 steps — testado,
-**não compensa**: 13× mais caro sem ganho) e `mage_flow_turbo_bf16` (text-to-image,
-ainda não integrado).
+O pipeline principal não exige custom node. Os grafos usam nós nativos da
+versão atual do ComfyUI.
 
-## Estágio 2 — polir
+## Draw Things
 
-| arquivo | tamanho | destino | origem |
-|---|---|---|---|
-| `RealVisXL_V5.0_fp16.safetensors` | 6,5 GB | `checkpoints/` | [SG161222/RealVisXL_V5.0](https://huggingface.co/SG161222/RealVisXL_V5.0) |
-| `1x-ITF-SkinDiffDetail-Lite-v1.pth` | 19 MB | `upscale_models/` | [openmodeldb](https://openmodeldb.info/models/1x-ITF-SkinDiffDetail-Lite-v1) · [uwg/upscaler](https://huggingface.co/uwg/upscaler) |
+Backend opcional e preferido quando disponível para geração rápida:
 
-Qualquer checkpoint SDXL fotorrealista serve. O workflow original usava
-`epicrealismXL`; aqui foi escolhido o RealVisXL V5 por ser SFW e de qualidade
-equivalente para esse fim — o estágio só reescreve altíssima frequência, então
-o que importa é o realismo de pele e tecido do checkpoint.
+- runtime: [Draw Things](https://github.com/drawthingsai/draw-things-community)
+- modelo: [Z-Image Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo), variante i8x local
+- diretório padrão desta máquina: `~/Library/Application Support/local-photo-ai-m5/models/`
 
-## Estágio 5 — ampliar
+O instalador não duplica automaticamente esses pesos. Sem eles, o roteador usa
+FLUX.2 no ComfyUI. Mantemos o Draw Things porque seu runtime Metal quantizado é
+mais apropriado ao Apple Silicon que os mesmos pesos BF16 via PyTorch/MPS.
 
-**SeedVR2** roda via [mflux](https://github.com/filipstrand/mflux) (MLX), **não**
-pelo ComfyUI — no ComfyUI/MPS ele consome 73–88 GB (issues 15053 e 15785, ambas
-abertas). O mflux baixa os pesos sozinho de
-[numz/SeedVR2_comfyUI](https://huggingface.co/numz/SeedVR2_comfyUI) (~12 GB) no
-primeiro uso.
+## MLX
 
-```bash
-uv tool install mflux
-```
+[MFLUX](https://github.com/filipstrand/mflux) executa o SeedVR2 pelo MLX. Os
+pesos (~12 GB) são baixados no primeiro uso. SeedVR2 é generativo: em edição ele
+roda antes do composite da cabeça; se falhar, o fallback é Lanczos.
 
-Alternativa não-generativa (`--esrgan`), útil quando você **não** quer que nada
-seja reinventado:
+## Não incluído no fluxo vencedor
 
-| arquivo | tamanho | destino | origem |
-|---|---|---|---|
-| `4x-UltraSharpV2.safetensors` | 133 MB | `upscale_models/` | [Kim2091/UltraSharpV2](https://huggingface.co/Kim2091/UltraSharpV2) |
-
-## Detecção de rosto
-
-Nenhum download. Usa o **Vision.framework** do próprio macOS, via
-`pyobjc-framework-Vision` — roda no Neural Engine. Ver
-[BUGS.md](BUGS.md) para o motivo de não ser MediaPipe.
-
-## Custom nodes
-
-| node | necessário? | para quê |
-|---|---|---|
-| [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) | opcional | samplers `res_2s` e afins |
-| [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) | opcional | só se quiser testar modelos quantizados |
-| [ComfyUI-Manager](https://github.com/Comfy-Org/ComfyUI-Manager) | opcional | conveniência |
-
-O pipeline principal **não depende de nenhum custom node**.
-
-## Avaliados e descartados
-
-| modelo | por quê |
+| candidato | veredito medido/estrutural |
 |---|---|
-| Qwen-Image-Edit-2511 (20B) | 341–712 s/imagem e preservou menos que o Mage 4B |
-| Step1X-Edit (~20B) | 41,8 GB, sem GGUF, MPS marcado *not planned*, 32 min–4,4 h/imagem |
-| Krea 2 | fp8 é bloqueado em MPS por código; bf16 são 26 GB só de UNet |
-| PuLID-Flux2 | quebrado por construção — ver [LIMITES.md](LIMITES.md) |
+| Qwen-Image-Edit-2511 Q4 | 341–712 s e mais drift que Mage neste M5 |
+| Step1X-Edit | CUDA/Triton, sem rota MPS suportada e memória incompatível |
+| Mage não-turbo | 1.767 s em 10 steps/CFG 2 sem ganho visível |
+| 4x-UltraSharpV2 | removido do instalador de produção por licença não comercial |
+| PuLID-Flux2 não oficial | não usado; integração/pesos não demonstraram carga válida |
+
+Pesos antigos podem permanecer no disco para experimentação, mas não são
+carregados pelo CLI/MCP vencedor.
