@@ -93,10 +93,19 @@ def main():
         "03 - Gerar versatil - FLUX2 Klein 4B.json",
         {"flux-2-klein-4b-fp8.safetensors": "flux-2-klein-4b.safetensors"},
     )
-    install(
-        "image_z_image_turbo.json",
-        "04 - Gerar rapido - Z-Image Turbo.json",
-    )
+    apple_fast = ROOT / "workflows/apple/04 - Gerar rapido - Z-Image Draw Things.json"
+    for directory in (REPO_OUT, USER_OUT):
+        directory.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(apple_fast, directory / "04 - Gerar rapido - Z-Image Draw Things.json")
+        obsolete = directory / "04 - Gerar rapido - Z-Image Turbo.json"
+        if obsolete.exists():
+            obsolete.unlink()
+
+    # Krea 2 usa o mesmo runtime MLX do CLI/MCP. Copiar o workflow versionado
+    # evita duplicar o checkpoint em formato ComfyUI somente para a interface.
+    krea_workflow = REPO_OUT / "05 - Fotorrealismo - Krea 2 Famegrid MLX.json"
+    USER_OUT.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(krea_workflow, USER_OUT / krea_workflow.name)
 
     readme = """# Workflows visuais
 
@@ -109,8 +118,12 @@ na pasta `foto-macos` depois de recarregar `http://127.0.0.1:8188`.
 2. **Referencias e cena / FLUX.2** — pessoa, roupa e estilo como referencias;
    candidato para `foto cena`.
 3. **Gerar versatil / FLUX.2** — texto para imagem local no ComfyUI.
-4. **Gerar rapido / Z-Image** — equivalente visual do backend usado pelo Draw
-   Things; no ComfyUI usa BF16 e por isso e mais lento que o i8x do Draw Things.
+4. **Gerar rapido / Z-Image** — chama o mesmo Draw Things i8x do CLI/MCP; nao
+   mantem uma copia BF16 mais lenta dentro do ComfyUI. O no visual roteia
+   apenas runtimes externos Apple; SDXL/FLUX usam os grafos nativos 1--3 para
+   nao chamar a fila do ComfyUI de dentro dela mesma.
+5. **Fotorrealismo / Krea 2 + Famegrid** — chama o mesmo runtime MLX Q4 do
+   CLI/MCP por um no customizado; nao duplica o checkpoint dentro do ComfyUI.
 
 O pipeline completo de preservacao de identidade tambem usa Vision.framework
 e SeedVR2/MLX. Essas etapas nao sao nos do ComfyUI; o grafo visual mostra o

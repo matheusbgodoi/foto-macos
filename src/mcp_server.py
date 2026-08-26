@@ -10,13 +10,14 @@ Registrar no Claude Code:
 
 Registrar no CRIAs AI / Codex: novo conector "stdio" com o mesmo comando.
 
-Precisa do ComfyUI no ar em 127.0.0.1:8188 — use a ferramenta foto_status.
+Operacoes que precisam do ComfyUI iniciam o servico local automaticamente.
 """
 import os
 import subprocess
 import sys
 import time
-import urllib.request
+
+from comfy_service import comfy_ok as _comfy_ok, ensure_comfy as _exige_comfy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PY = os.environ.get("FOTO_PYTHON") or os.path.expanduser(
@@ -40,26 +41,10 @@ app = MCPServer(
 )
 
 
-def _comfy_ok() -> bool:
-    try:
-        urllib.request.urlopen(COMFY + "/system_stats", timeout=3)
-        return True
-    except Exception:
-        return False
-
-
 def _rodar(script: str, args: list, timeout: int = 1800):
     r = subprocess.run([PY, os.path.join(HERE, script)] + [str(x) for x in args],
                        capture_output=True, text=True, timeout=timeout)
     return (r.stdout or "") + (r.stderr or ""), r.returncode
-
-
-def _exige_comfy():
-    if _comfy_ok():
-        return None
-    return (f"ComfyUI nao responde em {COMFY}. Suba com:\n"
-            f"  cd ~/comfyui && ./.venv/bin/python main.py "
-            f"--use-pytorch-cross-attention --reserve-vram 2 --listen 127.0.0.1")
 
 
 @app.tool(
@@ -144,8 +129,9 @@ def foto_referencias(fotos: list[str]) -> str:
 @app.tool(
     description=(
         "Cria uma imagem DO ZERO e escolhe o motor automaticamente: Draw Things + "
-        "Z-Image para fotografia/estilos rapidos; ComfyUI + SDXL quando uma LoRA SDXL "
-        "for fornecida; FLUX.2 quando explicitamente pedido. Para editar uma foto "
+        "Z-Image para fotografia/estilos rapidos; MLX + Krea 2/Famegrid para o teto "
+        "de fotorrealismo; ComfyUI + SDXL quando uma LoRA SDXL for fornecida; "
+        "FLUX.2 quando explicitamente pedido. Para editar uma foto "
         "existente use foto_editar; para varias referencias use foto_cena."
     )
 )
@@ -166,11 +152,27 @@ def foto_gerar(
         tamanho: "LARGURAxALTURA"; perto de 1 MP e o melhor custo/qualidade.
         seed: 0 = aleatoria.
         estilo: auto, foto-natural, iphone, profissional, produto, cartoon,
-            pixel-art, ilustracao, anime ou livre.
-        motor: auto, drawthings, sdxl ou flux2. Deixe auto normalmente.
+            pixel-art, ilustracao, anime, famegrid ou livre.
+        motor: auto, drawthings, krea2, sdxl ou flux2. Use krea2/famegrid para
+            maximizar fotorrealismo; Draw Things continua sendo o modo rapido.
         loras: LoRAs SDXL em models/loras, opcionalmente "nome:forca". Quando
             presentes, o roteador seleciona SDXL.
     """
+    # Esses caminhos enfileiram grafos no ComfyUI. Draw Things e Krea/MLX sao
+    # processos externos e nao devem pagar o custo de iniciar o servidor.
+    auto_needs_comfy = False
+    if motor == "auto" and not loras:
+        try:
+            from gerar_coringa import detect_style, drawthings_available
+            resolved_style = detect_style(prompt) if estilo == "auto" else estilo
+            auto_needs_comfy = (
+                resolved_style != "famegrid" and not drawthings_available())
+        except Exception:
+            auto_needs_comfy = False
+    if motor in ("sdxl", "flux2") or loras or auto_needs_comfy:
+        erro = _exige_comfy()
+        if erro:
+            return erro
     destino = os.path.abspath(os.path.expanduser(saida or os.path.join(
         "~/Downloads", f"foto_{int(time.time())}.png")))
     args = [prompt, "--tamanho", tamanho, "--estilo", estilo,
@@ -226,27 +228,43 @@ def foto_cena(
 @app.tool(description="Verifica se o ComfyUI esta no ar e quais modelos do pipeline estao instalados.")
 def foto_status() -> str:
     """Diagnostico do ambiente."""
-    m = os.path.expanduser(os.environ.get("COMFYUI_DIR", "~/comfyui") + "/models")
-    precisa = {
-        "editar": f"{m}/diffusion_models/mage_flow_edit_turbo_bf16.safetensors",
-        "encoder": f"{m}/text_encoders/qwen3vl_4b_bf16.safetensors",
-        "vae": f"{m}/vae/mage_flow_vae_bf16.safetensors",
-        "polir": f"{m}/checkpoints/RealVisXL_V5.0_fp16.safetensors",
-        "pele": f"{m}/upscale_models/1x-ITF-SkinDiffDetail-Lite-v1.pth",
-        "gerar/referencias": f"{m}/diffusion_models/flux-2-klein-4b.safetensors",
-    }
-    linhas = [f"ComfyUI em {COMFY}: {'no ar' if _comfy_ok() else 'FORA DO AR'}"]
-    for k, v in precisa.items():
-        linhas.append(f"  {'ok   ' if os.path.exists(v) else 'FALTA'} {k}: {os.path.basename(v)}")
-    draw_cli = os.path.expanduser(os.environ.get(
-        "DRAWTHINGS_BIN", "/opt/homebrew/bin/draw-things-cli"))
-    draw_model = os.path.expanduser(os.path.join(os.environ.get(
-        "DRAWTHINGS_MODELS_DIR",
-        "~/Library/Application Support/local-photo-ai-m5/models"),
-        "z_image_turbo_1.0_i8x.ckpt"))
-    draw_ok = os.path.isfile(draw_cli) and os.path.isfile(draw_model)
-    linhas.append(f"  {'ok   ' if draw_ok else 'opcional ausente'} gerar rapido: Draw Things + Z-Image i8x")
-    return "\n".join(linhas)
+    from status import report
+    return report()
+
+
+@app.tool(
+    description=(
+        "Consulta metadados verificaveis de um modelo/LoRA no Civitai: tipo, "
+        "base model, trigger words, arquivos e SHA-256. Aceita URL ou version ID. "
+        "A credencial fica no Keychain e nunca e devolvida."
+    )
+)
+def civitai_modelo(referencia: str) -> str:
+    """Inspeciona um recurso do Civitai sem baixar os pesos."""
+    txt, rc = _rodar("civitai.py", ["info", referencia], timeout=120)
+    return txt[-6000:] if rc == 0 else f"falhou:\n{txt[-1500:]}"
+
+
+@app.tool(
+    description=(
+        "Baixa um modelo/LoRA do Civitai, valida SHA-256 e devolve o caminho. "
+        "Aceita URL ou version ID. Use destino para escolher pasta/arquivo. "
+        "Confira a licenca do modelo antes de distribuir ou usar comercialmente."
+    )
+)
+def civitai_baixar(
+    referencia: str,
+    destino: str = "",
+    arquivo_id: int = 0,
+) -> str:
+    """Download autenticado centralizado; o token permanece no Keychain."""
+    args = ["baixar", referencia]
+    if destino:
+        args += ["--destino", os.path.abspath(os.path.expanduser(destino))]
+    if arquivo_id:
+        args += ["--arquivo", arquivo_id]
+    txt, rc = _rodar("civitai.py", args, timeout=7200)
+    return txt[-2000:] if rc == 0 else f"falhou:\n{txt[-1500:]}"
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Roteador de geracao para Apple Silicon.
 
-Um comando, tres backends especializados:
+Um comando, quatro backends especializados:
 
 * Draw Things + Z-Image i8x: padrao, rapido, fotografia e estilos por prompt;
+* MLX + Krea 2 Turbo + Famegrid: teto de fotorrealismo, mais lento;
 * ComfyUI + SDXL: somente quando ha LoRA/checkpoint SDXL explicito;
 * ComfyUI + FLUX.2 Klein: caminho local alternativo para prompt complexo.
 
@@ -61,6 +62,9 @@ PHOTO_PROMPTS = {
 def detect_style(prompt):
     text = prompt.lower()
     tests = (
+        ("famegrid", ("famegrid", "krea 2", "qualidade maxima",
+                      "qualidade máxima", "teto de realismo",
+                      "indistinguivel de real", "indistinguível de real")),
         ("pixel-art", ("pixel art", "pixel-art", "8-bit", "8 bit", "pixelado")),
         ("cartoon", ("cartoon", "cartum", "desenho animado")),
         ("anime", ("anime", "manga", "mangá")),
@@ -139,6 +143,14 @@ def comfy_flux2(args, output):
                 "--seed", str(args.seed)])
 
 
+def mlx_krea2(args, output, style):
+    krea_style = "iphone" if style == "iphone" else (
+        "profissional" if style in ("profissional", "produto") else "natural")
+    return run([PY, os.path.join(HERE, "krea2.py"), args.prompt,
+                "--saida", output, "--tamanho", args.tamanho,
+                "--seed", str(args.seed), "--estilo", krea_style])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("prompt")
@@ -147,16 +159,18 @@ def main():
     parser.add_argument("--seed", type=int, default=int(time.time()) % 1_000_000_000)
     parser.add_argument("--estilo", default="auto", choices=(
         "auto", "foto-natural", "iphone", "profissional", "produto",
-        "cartoon", "pixel-art", "ilustracao", "anime", "livre"))
+        "cartoon", "pixel-art", "ilustracao", "anime", "famegrid", "livre"))
     parser.add_argument("--motor", default="auto",
-                        choices=("auto", "drawthings", "sdxl", "flux2"))
+                        choices=("auto", "drawthings", "krea2", "sdxl", "flux2"))
     parser.add_argument("--lora", action="append", default=[])
     args = parser.parse_args()
 
     style = detect_style(args.prompt) if args.estilo == "auto" else args.estilo
     engine = args.motor
     if engine == "auto":
-        if args.lora:
+        if style == "famegrid":
+            engine = "krea2"
+        elif args.lora:
             engine = "sdxl"
         else:
             # Uma instalacao publica sem Draw Things continua funcional:
@@ -176,6 +190,8 @@ def main():
         return drawthings(args, style, output)
     if engine == "sdxl":
         return comfy_sdxl(args, output)
+    if engine == "krea2":
+        return mlx_krea2(args, output, style)
     return comfy_flux2(args, output)
 
 

@@ -18,6 +18,7 @@ não envia fotos para APIs externas.
 | pedido | backend | motivo |
 |---|---|---|
 | geração rápida/fotográfica | Draw Things + Z-Image Turbo i8x | runtime Metal quantizado; 54,7 s no teste “iPhone” |
+| fotorrealismo máximo (opt-in) | MLX + Krea 2 Turbo Q4 + Famegrid | melhor estética natural; 14,1× mais lento no teste cheio |
 | geração sem Draw Things | ComfyUI + FLUX.2 Klein 4B | fallback aberto e instalado pelo projeto |
 | geração com LoRA SDXL | ComfyUI + RealVisXL | ecossistema amplo de estilos/LoRAs |
 | cena nova com referências | ComfyUI + FLUX.2 Klein 4B | edição multi-referência nativa |
@@ -26,7 +27,8 @@ não envia fotos para APIs externas.
 
 O Draw Things continua instalado como motor interno rápido, mas não aparece
 como um segundo conector. O único conector que agentes veem chama-se
-`foto-macos`.
+`foto-macos`. Quando uma edição/cena precisa do ComfyUI e ele está desligado, o
+MCP inicia o serviço automaticamente; os backends externos não pagam esse custo.
 
 ## Edição com identidade estrita
 
@@ -67,6 +69,8 @@ instala os workflows visuais e aplica a correção do SeedVR2 documentada em
 i8x não existem, `foto gerar` cai automaticamente no FLUX.2/ComfyUI.
 
 Modelos, tamanhos e licenças: [docs/MODELOS.md](docs/MODELOS.md).
+Comparação de modelos, funções e tempos: [docs/COMPARACAO.md](docs/COMPARACAO.md).
+Tutorial operacional: [docs/TUTORIAL.md](docs/TUTORIAL.md).
 
 ## Uso
 
@@ -76,6 +80,8 @@ foto gerar "um mago numa torre" --estilo cartoon
 foto gerar "uma cidade espacial" --estilo pixel-art --tamanho 1024x1024
 
 foto gerar "retrato editorial" --motor flux2
+foto gerar "retrato casual numa cozinha real" --estilo famegrid
+foto gerar "foto comum de iPhone num bar" --motor krea2 --estilo iphone
 foto gerar "ilustração" --lora minha_lora.safetensors:0.8
 
 foto editar foto.jpg "Replace the blue shirt with a black hoodie. Keep face, hair, hands and background unchanged."
@@ -88,7 +94,7 @@ foto refs selfie1.heic selfie2.jpg
 ```
 
 Estilos: `auto`, `foto-natural`, `iphone`, `profissional`, `produto`,
-`cartoon`, `pixel-art`, `ilustracao`, `anime` e `livre`.
+`cartoon`, `pixel-art`, `ilustracao`, `anime`, `famegrid` e `livre`.
 
 ## Workflows no localhost
 
@@ -100,7 +106,8 @@ Recarregue `http://127.0.0.1:8188` e abra **Workflows → Browse → foto-macos*
 1. Editar foto — Mage-Flow Turbo
 2. Referências e cena — FLUX.2 Klein 4B
 3. Gerar versátil — FLUX.2 Klein 4B
-4. Gerar rápido — Z-Image Turbo
+4. Gerar rápido — Z-Image/Draw Things i8x (mesmo motor do CLI)
+5. Fotorrealismo — Krea 2/Famegrid MLX (mesmo motor do CLI)
 
 Os grafos representam o núcleo de difusão. Vision.framework e SeedVR2/MLX são
 processos externos ao ComfyUI e, por isso, o pipeline completo continua sendo
@@ -114,14 +121,17 @@ claude mcp add --scope user foto-macos -- \
 ```
 
 Ferramentas: `foto_gerar`, `foto_cena`, `foto_editar`, `foto_ampliar`,
-`foto_referencias` e `foto_status`. Configuração para Claude Code, Codex e
-Local Studio: [docs/CONECTORES.md](docs/CONECTORES.md).
+`foto_referencias`, `foto_status`, `civitai_modelo` e `civitai_baixar`.
+Configuração para Claude Code, Codex, OpenCode, Pi e Local Studio:
+[docs/CONECTORES.md](docs/CONECTORES.md).
 
 ## Resultados medidos neste M5
 
 | operação | tempo observado |
 |---|---:|
 | geração “iPhone”, Z-Image/Draw Things, 768×1024 | **54,7 s** |
+| Krea 2/Famegrid, 384×512 | **172,6 s** |
+| Krea 2/Famegrid, 640×896 | **689,1 s** (pico MLX 18,15 GB) |
 | geração SDXL, 896×1152 | **48 s** |
 | cena FLUX.2, 3 referências, 896×1216 | **212,6 s** |
 | edição Mage, ~1 MP | **44–160 s** |
