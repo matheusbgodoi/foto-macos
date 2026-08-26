@@ -43,7 +43,8 @@ Este repositório é a resposta a esses dois problemas.
                  │
     2. POLIR     │  SDXL denoise 0.03 + 1x-ITF-SkinDiffDetail          ~130 s
                  │
-    3. CABEÇA  ◄─┤  recola a cabeça REAL da foto original          instantâneo
+    3. CABEÇA  ◄─┤  recola a cabeça REAL — segmentação semântica,   ~1 s
+                 │  blend multi-banda, tom casado
                  │
     4. GRÃO    ◄─┘  injeta o grão que falta na área editada       instantâneo
                  │
@@ -58,6 +59,24 @@ Este repositório é a resposta a esses dois problemas.
   reconstrói tudo que enxerga, inclusive o rosto original.
 - **Nunca edite uma imagem já editada.** Duas passagens de difusão empilhadas
   achatam o cabelo e deformam o rosto. Edite sempre a foto original.
+- **A cabeça é recolada na resolução NATIVA da foto**, e a resolução volta no
+  estágio 5. Ampliar a foto antes de compor destrói ~54 % da energia de alta
+  frequência do rosto — e nenhum blend conserta isso depois.
+
+### Por que o composite não é um alpha blend
+
+Misturar duas fontes com `out = a·A + (1−a)·B`, quando cada uma tem grão
+independente, dá variância `s²(a² + (1−a)²)` — mínima em `a = 0,5`. Ou seja: a
+faixa de transição fica **~30 % mais lisa que os dois lados**, e aparece como um
+anel em volta da cabeça. É por isso que aumentar o feather piora.
+
+A solução é pirâmide Laplaciana (Burt & Adelson, 1983): cada banda de frequência
+cruza com a máscara *daquele nível*, o que dá uma largura de transição por
+oitava. O grão troca em ~3 px; o tom, em centenas. Feather base de **2 px**.
+
+Medido na costura (razão entre a textura da saída e a que as fontes teriam ali;
+1,0 = indistinguível): alpha com feather 22 → **0,80**, espalhado por ±32 px.
+Multi-banda → **0,94**, em ±8 px.
 
 ---
 
