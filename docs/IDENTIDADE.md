@@ -50,6 +50,24 @@ possuem norma diferente de zero e gere exemplos com seeds fixas antes de rodar
 o treino completo. Em 24 GB use QLoRA 8-bit, `max_resolution: 512`, batch 1,
 gradient checkpointing nativo do adaptador Krea e `low_ram: true`.
 
+### SimpleTuner com QKV fundido + MFLUX
+
+O exemplo oficial do SimpleTuner usa `fuse_qkv_projections=true`; por isso o
+adapter PEFT contém `attn.to_qkv`. O Krea 2 no MFLUX representa a mesma atenção
+como `to_q`, `to_k` e `to_v` separados. Converta o checkpoint antes da
+inferência no Mac:
+
+```bash
+python src/convert_krea2_fused_qkv_lora.py \
+  checkpoint/pytorch_lora_weights.safetensors \
+  identidade-krea2-mflux.safetensors
+```
+
+A conversão não aproxima nem reprocessa os pesos: ela reutiliza a projeção A e
+divide a projeção B nas dimensões exatas de Q/K/V (incluindo o GQA 48/12/12 do
+transformer). Confirme no log do MFLUX que não restaram chaves `to_qkv` sem
+correspondência.
+
 ## 3. Cadastrar o nome amigável
 
 Crie o arquivo privado:
