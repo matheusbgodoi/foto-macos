@@ -28,6 +28,13 @@ def tensor_copy(value):
     return value.clone() if hasattr(value, "clone") else value.copy()
 
 
+def tensor_norm(value) -> float:
+    """Norma em float32 para detectar adapters ainda na inicializacao zero."""
+    if hasattr(value, "float"):
+        return float(value.float().norm())
+    return float(np.linalg.norm(value.astype(np.float32, copy=False)))
+
+
 def qkv_sizes(prefix: str, total: int) -> tuple[int, int, int]:
     """Retorna as dimensoes de saida Q/K/V da arquitetura Krea 2."""
     if ".transformer_blocks." in prefix:
@@ -50,8 +57,11 @@ def convert_tensors(tensors: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     """Converte um dicionario de tensores e rejeita adapters incompletos."""
     converted: dict[str, np.ndarray] = {}
     fused_prefixes: set[str] = set()
+    b_norms: list[float] = []
 
     for key, value in tensors.items():
+        if ".lora_B." in key:
+            b_norms.append(tensor_norm(value))
         match_a = QKV_A.match(key)
         match_b = QKV_B.match(key)
         if match_a:
@@ -72,6 +82,10 @@ def convert_tensors(tensors: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
 
     if not fused_prefixes:
         raise ValueError("o adapter nao contem nenhuma camada attn.to_qkv fundida")
+    if not b_norms or not any(norm > 0 for norm in b_norms):
+        raise ValueError(
+            "todos os tensores lora_B estao zerados; o checkpoint nao aprendeu"
+        )
     for prefix in fused_prefixes:
         for name in ("q", "k", "v"):
             for matrix in ("A", "B"):

@@ -57,6 +57,14 @@ class KreaFusedQKVTests(unittest.TestCase):
                 "transformer.unknown.attn.to_qkv.lora_B.weight": np.zeros((6, 1)),
             })
 
+    def test_rejects_checkpoint_whose_b_matrices_are_all_zero(self):
+        prefix = "transformer.transformer_blocks.0.attn."
+        with self.assertRaisesRegex(ValueError, "checkpoint nao aprendeu"):
+            CONVERT.convert_tensors({
+                prefix + "to_qkv.lora_A.weight": np.ones((1, 6144), dtype=np.float32),
+                prefix + "to_qkv.lora_B.weight": np.zeros((9216, 1), dtype=np.float32),
+            })
+
 
 if __name__ == "__main__":
     unittest.main()
