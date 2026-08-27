@@ -135,6 +135,30 @@ Nada desta seção deve rodar até o usuário pedir para continuar.
    aprovação visual antes de promover qualquer preset ou documentação de
    produção.
 
+### Decisão incorporada da conversa lateral
+
+Krea 2 não será apagado ou substituído agora. A combinação de adapters já foi
+executada de verdade: identidade `step750` em 1,1 + Famegrid em 0,3. Ela melhora
+a estética geral, mas não atingiu o realismo da imagem de evento nem tornou a
+identidade robusta.
+
+A decomposição em duas passagens continua sendo uma boa hipótese, com uma
+restrição técnica importante: o Krea 2 Q4 usado no Mac pelo MFLUX é atualmente
+texto-para-imagem. Ele não oferece uma segunda passagem img2img/inpaint
+mascarada para aplicar a LoRA apenas no rosto. Portanto:
+
+- **comprovado:** as duas LoRAs carregam juntas numa geração completa;
+- **não comprovado:** Famegrid gerar a cena e uma segunda passagem Krea alterar
+  somente rosto/cabelo sem costura ou drift;
+- **onde validar:** ComfyUI/CUDA na RTX 3090, se houver uma rota Krea mascarada
+  funcional, comparando contra Krea em passagem única e FLUX.1 Dev;
+- **fallback mais seguro no Mac:** começar de uma foto real e preservar pixels
+  do sujeito, gerando somente fundo/roupa por máscaras semânticas.
+
+Não fundir identidade e Famegrid em um único adapter antes desses testes. Manter
+adapters separados conserva controle de peso, permite A/B e evita decorar um
+único estilo fotográfico dentro da identidade.
+
 ## Critério de sucesso na retomada
 
 O resultado só passa se cumprir simultaneamente:

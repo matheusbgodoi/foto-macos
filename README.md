@@ -72,6 +72,7 @@ Modelos, tamanhos e licenças: [docs/MODELOS.md](docs/MODELOS.md).
 Comparação de modelos, funções e tempos: [docs/COMPARACAO.md](docs/COMPARACAO.md).
 Tutorial operacional: [docs/TUTORIAL.md](docs/TUTORIAL.md).
 Treino local de identidade: [docs/IDENTIDADE.md](docs/IDENTIDADE.md).
+Reprodução, retenção e limpeza segura: [docs/REPRODUCAO-E-LIMPEZA.md](docs/REPRODUCAO-E-LIMPEZA.md).
 
 ## Uso
 
