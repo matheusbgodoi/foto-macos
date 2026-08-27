@@ -78,8 +78,9 @@ Opções relevantes:
   "attention_mechanism": "cudnn",
   "optimizer": "optimi-lion",
   "optimizer_offload_gradients": true,
-  "optimizer_release_gradients": true,
-  "max_grad_norm": 0.0
+  "optimizer_release_gradients": false,
+  "optimizer_config": "kahan_sum=false,foreach=false",
+  "max_grad_norm": 0.01
 }
 ```
 
@@ -87,10 +88,11 @@ Mantenha `caption_dropout_probability` em zero para identidade: o exemplo
 oficial Krea 2 do SimpleTuner também usa zero, evitando treinar imagens da pessoa
 sem o token que deve acioná-la.
 
-Com `optimizer_release_gradients`, algumas versões do SimpleTuner deixam
-`grad_norm` como `float`, mas o logger chama `.clone()` ao salvar. A correção
-compatível está em `patches/simpletuner-grad-metric.patch`; aplique no clone do
-SimpleTuner com `git apply` antes do treino.
+Não ative `optimizer_release_gradients` nessa combinação: o treino pode concluir
+e salvar um adapter cujos tensores `lora_B` continuam zerados. Valide sempre as
+normas do primeiro checkpoint antes de iniciar uma execução longa. Desativar
+Kahan e `foreach` remove o estado temporário que estourava os 24 GB sem descartar
+os gradientes.
 
 ### SimpleTuner com QKV fundido + MFLUX
 
