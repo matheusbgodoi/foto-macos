@@ -146,6 +146,12 @@ def export(library: str, uuids: Path, raw: Path) -> None:
 
 
 def caption(item: dict, trigger: str) -> str:
+    """Cria um rascunho apenas com variaveis conhecidas pelos metadados.
+
+    Nao descreve rosto, pele ou cabelo: atributos estaveis devem ser aprendidos
+    pelo token. Roupa e cenario nao existem nos metadados do Photos e precisam
+    ser acrescentados manualmente antes do treino.
+    """
     face = item["_target_face"]
     framing = {
         "close": "close-up portrait",
@@ -158,8 +164,7 @@ def caption(item: dict, trigger: str) -> str:
     if int(face.get("glasses_type") or 0) not in (0, 3):
         details.append("wearing glasses")
     suffix = ", " + ", ".join(details) if details else ""
-    return (f"A real candid photograph of {trigger}, an adult man, {framing}{suffix}, "
-            "natural skin texture, real hair, ordinary lighting and a believable environment.")
+    return f"A candid photograph of {trigger}, an adult man, {framing}{suffix}."
 
 
 def difference_hash(image: Image.Image) -> int:

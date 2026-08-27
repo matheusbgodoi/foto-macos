@@ -26,10 +26,13 @@ python src/prepare_photos_identity.py \
   --count 40
 ```
 
-Revise `contact-sheet.jpg` antes de treinar. Remova fotos com filtros, texto
-sobreposto, outras pessoas, reflexos duplicados, rosto oculto e várias imagens
-quase iguais. O script aceita `--reject-uuid-file` para repetir a seleção sem
-alterar o app Fotos.
+Revise `contact-sheet.jpg` e **todas as captions** antes de treinar. Remova fotos
+com filtros, texto sobreposto, outras pessoas, reflexos duplicados, rosto oculto
+e várias imagens quase iguais. As captions automáticas são rascunhos porque o
+Photos não descreve roupa ou cenário: acrescente roupa, óculos, pose, expressão,
+iluminação e ambiente como variáveis. Não descreva rosto, cabelo ou outros
+traços permanentes que o token deve aprender. O script aceita
+`--reject-uuid-file` para repetir a seleção sem alterar o app Fotos.
 
 ## 2. Obter o checkpoint de treino
 
