@@ -68,6 +68,7 @@ Opções relevantes:
 {
   "base_model_precision": "int8-torchao",
   "quantize_via": "cpu",
+  "caption_dropout_probability": 0.0,
   "mixed_precision": "bf16",
   "resolution": 768,
   "train_batch_size": 1,
@@ -81,6 +82,10 @@ Opções relevantes:
   "max_grad_norm": 0.0
 }
 ```
+
+Mantenha `caption_dropout_probability` em zero para identidade: o exemplo
+oficial Krea 2 do SimpleTuner também usa zero, evitando treinar imagens da pessoa
+sem o token que deve acioná-la.
 
 Com `optimizer_release_gradients`, algumas versões do SimpleTuner deixam
 `grad_norm` como `float`, mas o logger chama `.clone()` ao salvar. A correção
