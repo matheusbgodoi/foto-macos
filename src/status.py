@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from comfy_service import COMFY, comfy_ok
-from krea2 import model_path as krea_model_path
+from krea2 import identity_registry, model_path as krea_model_path
 
 
 def report() -> str:
@@ -40,6 +40,11 @@ def report() -> str:
     krea_ok = os.path.isfile(famegrid) and bool(krea_model_path())
     lines.append(
         f"  {'ok   ' if krea_ok else 'opcional ausente'} fotorrealismo: Krea 2 Q4 + Famegrid")
+    for name, config in identity_registry().items():
+        path = os.path.abspath(os.path.expanduser(str(config.get("lora", ""))))
+        lines.append(
+            f"  {'ok   ' if os.path.isfile(path) else 'PENDENTE'} identidade {name}: "
+            f"{os.path.basename(path) or 'LoRA sem caminho'}")
     return "\n".join(lines)
 
 

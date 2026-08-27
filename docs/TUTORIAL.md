@@ -53,6 +53,17 @@ foto gerar "personagem numa floresta" --estilo anime
 foto gerar "frasco de perfume sobre pedra" --estilo produto
 ```
 
+Se um nome estiver cadastrado no registro privado de identidades, basta usá-lo
+no prompt. O roteador seleciona Krea 2, troca o nome pelo token técnico e
+empilha a LoRA de identidade com a Famegrid:
+
+```bash
+foto gerar "Pessoa apresentando uma palestra de tecnologia, foto casual de iPhone"
+```
+
+Veja [IDENTIDADE.md](IDENTIDADE.md). Se a LoRA ainda não existir, o comando
+falha explicitamente em vez de gerar silenciosamente outra pessoa.
+
 ## Editar uma fotografia existente
 
 Use quando pose e enquadramento devem permanecer iguais:

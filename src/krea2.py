@@ -10,6 +10,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -43,6 +44,9 @@ LORA = os.path.expanduser(os.environ.get(
     "FAMEGRID_LORA",
     "~/Library/Application Support/foto-macos/loras/krea2/"
     "Famegrid-Natural-V1-Krea-2.safetensors"))
+IDENTITIES_FILE = os.path.expanduser(os.environ.get(
+    "FOTO_IDENTITIES_FILE",
+    "~/Library/Application Support/foto-macos/identities.json"))
 
 STYLE = {
     "natural": (
@@ -60,6 +64,41 @@ STYLE = {
 }
 
 
+def identity_registry() -> dict:
+    """Carrega o registro privado sem exigir que as LoRAs ja existam."""
+    if not os.path.isfile(IDENTITIES_FILE):
+        return {}
+    try:
+        with open(IDENTITIES_FILE, encoding="utf-8") as handle:
+            registry = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return registry if isinstance(registry, dict) else {}
+
+
+def identity_matches(prompt: str) -> list[dict]:
+    """Resolve nomes publicos para tokens/LoRAs privados configurados localmente."""
+    registry = identity_registry()
+    matches = []
+    for name, config in registry.items():
+        if not isinstance(config, dict):
+            continue
+        if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", prompt,
+                     flags=re.IGNORECASE):
+            item = dict(config)
+            item["name"] = name
+            matches.append(item)
+    return matches
+
+
+def apply_identities(prompt: str, matches: list[dict]) -> str:
+    for item in matches:
+        token = str(item.get("token") or item["name"])
+        prompt = re.sub(rf"(?<!\w){re.escape(item['name'])}(?!\w)", token,
+                        prompt, flags=re.IGNORECASE)
+    return prompt
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("prompt")
@@ -67,7 +106,11 @@ def main() -> int:
     parser.add_argument("--tamanho", default="1024x1024")
     parser.add_argument("--seed", type=int, default=int(time.time()) % 1_000_000_000)
     parser.add_argument("--estilo", choices=tuple(STYLE), default="natural")
-    parser.add_argument("--peso", type=float, default=0.7)
+    parser.add_argument(
+        "--peso", type=float, default=None,
+        help=("peso da Famegrid; padrao 0.7 sem identidade e 0.3 quando uma "
+              "identidade privada e reconhecida"),
+    )
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--guidance", type=float, default=1.0)
     parser.add_argument("--sem-lora", action="store_true")
@@ -90,6 +133,27 @@ def main() -> int:
     stem, extension = os.path.splitext(output)
     temporary = f"{stem}.foto-macos-{uuid.uuid4().hex}{extension or '.png'}"
     user_prompt = args.prompt.strip()
+    identities = [] if args.sem_lora else identity_matches(user_prompt)
+    for identity in identities:
+        identity["lora"] = os.path.abspath(os.path.expanduser(str(identity.get("lora", ""))))
+        if not os.path.isfile(identity["lora"]):
+            print(f"erro: a identidade {identity['name']!r} foi reconhecida, mas a "
+                  f"LoRA ainda nao existe: {identity['lora']}", file=sys.stderr)
+            return 2
+    user_prompt = apply_identities(user_prompt, identities)
+    if args.peso is not None:
+        famegrid_scale = args.peso
+    elif identities:
+        # Famegrid forte melhora o aspecto natural, mas compete com a LoRA de
+        # identidade. Nos testes controlados no M5, 0.3 preservou muito mais o
+        # rosto que 0.7 sem perder o look fotografico. Cada identidade pode
+        # calibrar esse valor no registro privado.
+        famegrid_scale = min(
+            float(identity.get("famegrid_scale", 0.3))
+            for identity in identities
+        )
+    else:
+        famegrid_scale = 0.7
     trigger = ""
     if not args.sem_lora and not user_prompt.lower().startswith("famegrid"):
         trigger = "Famegrid, "
@@ -102,9 +166,13 @@ def main() -> int:
         "--seed", str(args.seed), "--output", temporary, "--metadata",
     ]
     if not args.sem_lora:
-        command += ["--lora", LORA, str(args.peso), "--no-bake-lora"]
+        command += ["--lora", LORA, str(famegrid_scale)]
+        for identity in identities:
+            command += ["--lora", identity["lora"], str(identity.get("scale", 0.85))]
+        command += ["--no-bake-lora"]
     print(f"[krea2] {width}x{height} steps={args.steps} guidance={args.guidance} "
-          f"Famegrid={args.peso}",
+          f"Famegrid={famegrid_scale} identidades="
+          f"{','.join(item['name'] for item in identities) or '-'}",
           file=sys.stderr)
     result = subprocess.run(command)
     if result.returncode:

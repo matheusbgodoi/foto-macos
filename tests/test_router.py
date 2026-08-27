@@ -32,6 +32,24 @@ class RouterTests(unittest.TestCase):
         for style in ("cartoon", "pixel-art", "ilustracao", "anime"):
             self.assertIn(style, ROUTER.STYLE_PROMPTS)
 
+    def test_identity_forces_krea_without_overwriting_style(self):
+        self.assertEqual(ROUTER.detect_style(
+            "Pessoa em uma palestra, foto de iPhone"), "iphone")
+        self.assertEqual(ROUTER.select_engine(
+            "auto", "iphone", True, [], True), "krea2")
+
+    def test_explicit_engine_still_wins(self):
+        self.assertEqual(ROUTER.select_engine(
+            "flux2", "iphone", True, [], True), "flux2")
+
+    def test_router_fallbacks(self):
+        self.assertEqual(ROUTER.select_engine(
+            "auto", "foto-natural", False, [], True), "drawthings")
+        self.assertEqual(ROUTER.select_engine(
+            "auto", "foto-natural", False, [], False), "flux2")
+        self.assertEqual(ROUTER.select_engine(
+            "auto", "cartoon", False, ["style.safetensors"], True), "sdxl")
+
 
 if __name__ == "__main__":
     unittest.main()

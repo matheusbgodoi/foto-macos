@@ -77,6 +77,26 @@ def detect_style(prompt):
     return "foto-natural"
 
 
+def has_identity(prompt):
+    """Identidade e uma capacidade do motor, nao um estilo visual."""
+    try:
+        from krea2 import identity_matches
+        return bool(identity_matches(prompt))
+    except Exception:
+        return False
+
+
+def select_engine(requested, style, identity, loras, draw_available):
+    """Escolhe o backend sem deixar um preset ocultar a identidade."""
+    if requested != "auto":
+        return requested
+    if identity or style == "famegrid":
+        return "krea2"
+    if loras:
+        return "sdxl"
+    return "drawthings" if draw_available else "flux2"
+
+
 def run(command):
     process = subprocess.run(command, text=True, capture_output=True)
     if process.stdout:
@@ -166,16 +186,9 @@ def main():
     args = parser.parse_args()
 
     style = detect_style(args.prompt) if args.estilo == "auto" else args.estilo
-    engine = args.motor
-    if engine == "auto":
-        if style == "famegrid":
-            engine = "krea2"
-        elif args.lora:
-            engine = "sdxl"
-        else:
-            # Uma instalacao publica sem Draw Things continua funcional:
-            # FLUX.2 e o fallback mantido pelo proprio repo/ComfyUI.
-            engine = "drawthings" if drawthings_available() else "flux2"
+    identity = has_identity(args.prompt)
+    engine = select_engine(
+        args.motor, style, identity, args.lora, drawthings_available())
     extension = ".png"
     output = os.path.abspath(os.path.expanduser(args.saida or os.path.join(
         "~/Downloads", f"foto_{int(time.time())}{extension}")))
