@@ -46,8 +46,12 @@ def ensure_comfy() -> str | None:
             return f"Python do ComfyUI ausente: {PY}"
         command = [
             PY, os.path.join(COMFY_DIR, "main.py"),
-            "--use-pytorch-cross-attention", "--reserve-vram", "6",
-            "--force-fp16", "--port", str(parsed.port or 8188),
+            # Mage-Flow declara bf16/float32. --force-fp16 converte o modelo
+            # antes de consultar essa declaracao e, no MPS, pode produzir NaNs
+            # que o ComfyUI salva como um PNG preto. Dois GB reservados tambem
+            # evitam o ciclo de offload causado pela antiga reserva de 6 GB.
+            "--use-pytorch-cross-attention", "--reserve-vram", "2",
+            "--port", str(parsed.port or 8188),
             "--listen", parsed.hostname or "127.0.0.1",
         ]
         try:

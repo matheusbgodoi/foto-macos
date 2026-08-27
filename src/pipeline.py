@@ -48,6 +48,23 @@ def achar(prefixo):
     return os.path.join(OUT, max(cands, key=lambda f: os.path.getmtime(os.path.join(OUT, f))))
 
 
+def imagem_valida(path):
+    """Recusa quadros vazios/pretos antes de encadear modelos caros.
+
+    O ComfyUI pode concluir o grafo e salvar um PNG preto quando um modelo fica
+    em estado invalido sob pressao de memoria. Existencia do arquivo nao basta.
+    """
+    try:
+        from PIL import Image, ImageStat
+        with Image.open(path) as image:
+            stats = ImageStat.Stat(image.convert("RGB").resize((64, 64)))
+        luminance = sum(stats.mean) / 3
+        variation = sum(stats.stddev) / 3
+        return luminance >= 3.0 and variation >= 1.0
+    except (OSError, ValueError):
+        return False
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -80,14 +97,20 @@ def main():
     if not step("mage.py", args, "1/5 editar (Mage-Flow-Edit-Turbo)"):
         sys.exit(1)
     atual = achar(tag + "e")
-    if not atual:
-        print("erro: a edicao nao produziu arquivo"); sys.exit(1)
+    if not atual or not imagem_valida(atual):
+        print("erro: a edicao produziu arquivo ausente, preto ou sem variacao; "
+              "pipeline interrompido antes do polimento")
+        sys.exit(1)
 
     # 2. POLIR
     if not a.sem_polir:
         if step("polir.py", [atual, "--out", tag + "p", "--escala", 1.0],
                 "2/5 polir (SDXL denoise 0.03 + pele)"):
-            atual = achar(tag + "p") or atual
+            polido = achar(tag + "p")
+            if polido and imagem_valida(polido):
+                atual = polido
+            else:
+                print("   polimento invalido/preto; mantendo a edicao valida")
 
     # 3. AMPLIAR — ANTES de recolar a cabeca. O SeedVR2 e generativo: se rodar
     #    depois, ele re-gera justamente o rosto que o composite preservou.

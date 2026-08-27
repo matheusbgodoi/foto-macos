@@ -103,13 +103,28 @@ def foto_editar(
     return f"{destino}\n\n{saida_txt[-600:]}"
 
 
-@app.tool(description="Amplia uma imagem com SeedVR2, reconstruindo microtextura real. ~26 s para 2x.")
-def foto_ampliar(imagem: str, saida: str = "", escala: float = 2.0) -> str:
-    """Amplia e devolve o caminho do resultado."""
+@app.tool(description=(
+    "Amplia uma imagem com SeedVR2. O modo fiel preserva mais a entrada; "
+    "equilibrado e criativo reconstroem mais textura, mas podem mudar rostos."
+))
+def foto_ampliar(
+    imagem: str,
+    saida: str = "",
+    escala: float = 2.0,
+    modo: str = "fiel",
+) -> str:
+    """Amplia e devolve o caminho do resultado.
+
+    Args:
+        modo: fiel, equilibrado ou criativo. Para pessoas, use fiel.
+    """
+    if modo not in {"fiel", "equilibrado", "criativo"}:
+        return "modo invalido: use fiel, equilibrado ou criativo"
     img = os.path.abspath(os.path.expanduser(imagem))
     destino = os.path.abspath(os.path.expanduser(
         saida or os.path.splitext(img)[0] + "_2x.png"))
-    txt, rc = _rodar("ampliar.py", [img, "--out", destino, "--escala", escala])
+    txt, rc = _rodar("ampliar.py", [img, "--out", destino, "--escala", escala,
+                                     "--modo", modo])
     return destino if (rc == 0 and os.path.exists(destino)) else f"falhou:\n{txt[-1000:]}"
 
 

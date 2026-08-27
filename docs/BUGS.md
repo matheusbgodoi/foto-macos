@@ -117,3 +117,10 @@ consultar o modelo. O Mage-Flow declara só `[bfloat16, float32]`. E
 `--reserve-vram 6` é excessivo: em MPS o `get_free_memory()` lê
 `psutil.available`, e reservar 6 GB de ~16 GB úteis provoca ciclos de
 offload/reload.
+
+**Falha observada em produção:** o grafo do Mage concluiu normalmente, mas o
+log mostrou `RuntimeWarning: invalid value encountered in cast` no `SaveImage`;
+o PNG continha média e desvio padrão iguais a zero. O autostart ainda carregava
+as flags antigas apesar desta documentação. O serviço agora inicia sem
+`--force-fp16`, com `--reserve-vram 2`, e o pipeline recusa quadros pretos antes
+de executar o polimento SDXL.

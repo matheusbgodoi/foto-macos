@@ -93,7 +93,10 @@ def main():
     u = sub.add_parser("ampliar", help="upscale (SeedVR2 por padrao)")
     u.add_argument("imagem"); u.add_argument("--escala", type=float, default=2.0)
     u.add_argument("--out", default=None, help="arquivo de saida (padrao: <nome>_2x.png)")
-    u.add_argument("--softness", type=float, default=0.5)
+    u.add_argument("--modo", choices=("fiel", "equilibrado", "criativo"),
+                   default="fiel", help="fiel e o padrao seguro para rostos")
+    u.add_argument("--softness", type=float, default=None,
+                   help="avancado: substitui o preset de --modo")
 
     r = sub.add_parser("refs", help="prepara fotos de referencia de identidade")
     r.add_argument("fotos", nargs="+")
@@ -176,7 +179,9 @@ def main():
     if a.cmd == "ampliar":
         out = a.out or os.path.splitext(a.imagem)[0] + f"_{int(a.escala)}x.png"
         args = [a.imagem, "--out", out, "--escala", str(a.escala),
-                "--softness", str(a.softness)]
+                "--modo", a.modo]
+        if a.softness is not None:
+            args += ["--softness", str(a.softness)]
         return run("ampliar.py", args)
 
     if a.cmd == "refs":

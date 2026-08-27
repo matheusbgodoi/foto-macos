@@ -96,7 +96,11 @@ def run(graph):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("imagem")
-    ap.add_argument("--out", default="polido")
+    ap.add_argument(
+        "--out", default="polido",
+        help=("prefixo dentro de FOTO_OUT ou caminho final explicito. "
+              "Caminhos absolutos nunca sao enviados ao SaveImage do ComfyUI."),
+    )
     ap.add_argument("--steps", type=int, default=20)
     ap.add_argument("--cfg", type=float, default=3.5)
     ap.add_argument("--denoise", type=float, default=0.03,
@@ -117,15 +121,31 @@ def main():
     w, h = Image.open(src).size
     mp = a.mp if a.mp > 0 else (w * h) / 1_000_000
 
+    explicit_out = (os.path.isabs(os.path.expanduser(a.out)) or
+                    os.path.dirname(os.path.expanduser(a.out)) != "" or
+                    os.path.splitext(a.out)[1].lower() in {".png", ".jpg", ".jpeg", ".webp"})
+    requested_out = os.path.abspath(os.path.expanduser(a.out)) if explicit_out else None
+    # SaveImage aceita apenas um prefixo relativo ao output do ComfyUI. Passar
+    # /Users/.../Downloads fazia todo o grafo terminar e falhar somente ao salvar.
+    prefix = (f"polir_{uuid.uuid4().hex[:10]}" if explicit_out else a.out)
+
     print(f"[polir] {w}x{h} · denoise={a.denoise} steps={a.steps} cfg={a.cfg} "
           f"escala={a.escala} pele={not a.sem_pele}")
-    g = build(name, a.steps, a.cfg, a.denoise, a.escala, a.seed, mp, a.out, not a.sem_pele)
+    g = build(name, a.steps, a.cfg, a.denoise, a.escala, a.seed, mp, prefix,
+              not a.sem_pele)
     outs, dt = run(g)
     if not outs:
         sys.exit(1)
-    for im in outs:
+    for index, im in enumerate(outs):
         s = os.path.join(os.path.expanduser(os.environ.get("COMFYUI_DIR", "~/comfyui") + "/output"), im.get("subfolder", ""), im["filename"])
-        dst = os.path.join(OUT_DIR, im["filename"])
+        if requested_out and index == 0:
+            dst = requested_out
+        elif requested_out:
+            root, ext = os.path.splitext(requested_out)
+            dst = f"{root}_{index + 1}{ext or '.png'}"
+        else:
+            dst = os.path.join(OUT_DIR, im["filename"])
+        os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
         shutil.copy(s, dst)
         print(f"[polir] {dst}  ({dt:.1f}s)")
 

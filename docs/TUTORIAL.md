@@ -112,11 +112,22 @@ mas recria a pessoa; não garante identidade biométrica ou pixel-idêntica.
 ## Ampliar
 
 ```bash
-foto ampliar ~/Downloads/imagem.png --escala 2
+foto ampliar ~/Downloads/imagem.png --escala 2 --modo fiel
+foto ampliar ~/Downloads/paisagem.png --escala 2 --modo equilibrado
 ```
 
-SeedVR2 é generativo e pode alterar microdetalhes. Em JPEGs pequenos do WhatsApp
-ou quando o rosto já está correto, compare também a versão sem upscale.
+Os modos controlam quanto o SeedVR2 pode reconstruir:
+
+| modo | softness | uso |
+|---|---:|---|
+| `fiel` | 0 | sem pre-downsampling; prefira para rostos e identidade |
+| `equilibrado` | 0,5 | mais reconstrução de tecido, cabelo e cenário |
+| `criativo` | 0,75 | restauração agressiva; pode mudar traços e objetos |
+
+SeedVR2 é generativo mesmo no modo `fiel`: ele pode alterar olhos, pele e
+microgeometria. Quando a identidade já está correta, compare com a entrada e
+não promova automaticamente a versão ampliada. No pipeline de edição, as etapas
+generativas rodam antes de a cabeça original ser recomposta.
 
 ## Workflows visuais
 
