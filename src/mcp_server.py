@@ -165,10 +165,12 @@ def foto_gerar(
     auto_needs_comfy = False
     if motor == "auto" and not loras:
         try:
-            from gerar_coringa import detect_style, drawthings_available
+            from gerar_coringa import detect_style, drawthings_available, has_identity
             resolved_style = detect_style(prompt) if estilo == "auto" else estilo
             auto_needs_comfy = (
-                resolved_style != "famegrid" and not drawthings_available())
+                not has_identity(prompt)
+                and resolved_style != "famegrid"
+                and not drawthings_available())
         except Exception:
             auto_needs_comfy = False
     if motor in ("sdxl", "flux2") or loras or auto_needs_comfy:

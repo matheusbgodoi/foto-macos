@@ -94,6 +94,13 @@ normas do primeiro checkpoint antes de iniciar uma execução longa. Desativar
 Kahan e `foreach` remove o estado temporário que estourava os 24 GB sem descartar
 os gradientes.
 
+Uma execução validada com 24 imagens revisadas, 768 px, rank 32 e 250 passos
+terminou em aproximadamente 26 minutos numa RTX 3090, com pico perto de 20 GB
+de VRAM. Checkpoints intermediários devem ser comparados em pelo menos duas
+cenas e seeds fixas: nessa execução, o passo 200 generalizou melhor que o 250,
+que começou a copiar enquadramento e aparência de selfie. Mais passos ou mais
+fotos não garantem uma identidade melhor.
+
 ### SimpleTuner com QKV fundido + MFLUX
 
 O exemplo oficial do SimpleTuner usa `fuse_qkv_projections=true`; por isso o
@@ -139,6 +146,10 @@ O roteador executa Krea 2 Turbo + Famegrid + LoRA de identidade. Sem identidade,
 Famegrid usa 0,7; com identidade, cai para 0,3 por padrão para não dominar os
 traços aprendidos. `--peso` sobrescreve esse valor. `foto status` mostra `ok` ou
 `PENDENTE` para cada identidade cadastrada.
+
+Identidade e estilo são decisões separadas: mesmo com `--estilo iphone`,
+`profissional` ou `foto-natural`, um nome cadastrado força o backend Krea 2. O
+preset continua controlando apenas a aparência fotográfica.
 
 ## Privacidade
 

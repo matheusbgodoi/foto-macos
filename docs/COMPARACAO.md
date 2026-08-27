@@ -12,6 +12,7 @@ podem alterar bastante o resultado.
 | **Z-Image Turbo i8x** | gerador de imagem | geração rápida de fotografia e estilos comuns | padrão de `foto gerar`, via Draw Things | **40–60 s** perto de 1 MP; 54,7 s no teste 768×1024 | menos natural que Krea/Famegrid e ainda pode errar anatomia |
 | **Krea 2 Turbo Q4** | gerador de imagem | maior teto de fotorrealismo e estética cotidiana | `--estilo famegrid`, `--motor krea2` ou pedido explícito por qualidade máxima | **172,6 s** em 384×512; **689,1 s** em 640×896 | 3–14× mais lento que Z-Image; licença comunitária própria |
 | **Famegrid Natural V1** | LoKr/LoRA para Krea 2 | tira o aspecto excessivamente encenado/cinematográfico e força fotografia comum | carregado junto do Krea, peso padrão 0,7 e trigger `Famegrid` | incluído no tempo do Krea | não corrige sozinho mãos, olhos ou objetos incoerentes |
+| **LoRA de identidade Krea 2** | adapter privado por pessoa | repete rosto, cabelo e aparência ao citar o nome cadastrado | empilhado com Famegrid; força automaticamente o backend Krea 2 | incluído no tempo do Krea | melhora muito a semelhança, mas não oferece garantia biométrica e pode puxar enquadramentos do dataset |
 | **Mage-Flow-Edit-Turbo 4B** | editor por instrução | troca roupa, objetos ou fundo mantendo a foto como base | `foto editar` e `foto vestir` | **44–160 s** para a difusão, normalmente perto de 100 s | redesenha o quadro; o pipeline precisa recolocar a cabeça e casar o grão |
 | **Qwen3-VL-4B** | encoder texto/visão | lê a instrução e as imagens para o Mage-Flow | automaticamente durante edição | incluído no tempo do Mage | não gera pixels sozinho |
 | **FLUX.2 Klein 4B** | gerador/editor multi-reference | cria cenas novas com pessoa, roupa e objetos de várias referências; fallback de geração | `foto cena` ou quando Draw Things não está disponível | **212,6 s** para 3 referências em 896×1216 | identidade zero-shot é semelhante, não biométrica/pixel-idêntica |
@@ -26,7 +27,7 @@ podem alterar bastante o resultado.
 | caso | rota completa | tempo típico/medido |
 |---|---|---:|
 | gerar rápido | Z-Image + Draw Things | **40–60 s** |
-| gerar com máximo fotorrealismo | Krea 2 Q4 + Famegrid | **~3 min** em 384×512; **~11,5 min** em 640×896 |
+| gerar com máximo fotorrealismo/identidade | Krea 2 Q4 + Famegrid + LoRA opcional | **~1–3 min** em 384–512 px; **~11,5 min** em 640×896 |
 | gerar com uma LoRA SDXL | RealVisXL + LoRA | **~48 s** no teste base; varia com steps/LoRA |
 | editar mantendo rosto/cenário | Mage → RealVisXL 0,03 → cabeça original → grão | **~3–4 min** |
 | editar e ampliar 2× | pipeline anterior + SeedVR2 antes do composite | aproximadamente **4 min** |
