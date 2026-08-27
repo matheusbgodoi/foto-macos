@@ -83,7 +83,7 @@ foto gerar "uma cidade espacial" --estilo pixel-art --tamanho 1024x1024
 foto gerar "retrato editorial" --motor flux2
 foto gerar "retrato casual numa cozinha real" --estilo famegrid
 foto gerar "foto comum de iPhone num bar" --motor krea2 --estilo iphone
-foto gerar "Matheus apresentando uma palestra de tecnologia" # se Matheus estiver cadastrado
+foto gerar "Pessoa apresentando uma palestra de tecnologia" # se Pessoa estiver cadastrada
 foto gerar "ilustração" --lora minha_lora.safetensors:0.8
 
 foto editar foto.jpg "Replace the blue shirt with a black hoodie. Keep face, hair, hands and background unchanged."

@@ -34,7 +34,7 @@ class RouterTests(unittest.TestCase):
 
     def test_identity_forces_krea_without_overwriting_style(self):
         self.assertEqual(ROUTER.detect_style(
-            "Matheus em uma palestra, foto de iPhone"), "iphone")
+            "Pessoa em uma palestra, foto de iPhone"), "iphone")
         self.assertEqual(ROUTER.select_engine(
             "auto", "iphone", True, [], True), "krea2")
 

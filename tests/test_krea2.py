@@ -57,7 +57,7 @@ class KreaRunnerTests(unittest.TestCase):
             identity_lora.write_text("fake")
             registry = root / "identities.json"
             registry.write_text(
-                '{"Matheus":{"token":"matheus_person","lora":"%s","scale":0.85}}'
+                '{"Pessoa":{"token":"pessoa_test_token","lora":"%s","scale":0.85}}'
                 % identity_lora
             )
             model = root / "model"
@@ -71,7 +71,7 @@ class KreaRunnerTests(unittest.TestCase):
                 temporary.write_bytes(b"fresh")
                 return types.SimpleNamespace(returncode=0)
 
-            argv = ["krea2.py", "Matheus giving a talk", "--saida", str(output)]
+            argv = ["krea2.py", "Pessoa giving a talk", "--saida", str(output)]
             with (
                 mock.patch.object(KREA, "MFLUX", str(binary)),
                 mock.patch.object(KREA, "LORA", str(famegrid)),
@@ -87,7 +87,7 @@ class KreaRunnerTests(unittest.TestCase):
             famegrid_position = command.index(str(famegrid))
             self.assertEqual(command[famegrid_position + 1], "0.3")
             prompt = command[command.index("--prompt") + 1]
-            self.assertIn("matheus_person giving a talk", prompt)
+            self.assertIn("pessoa_test_token giving a talk", prompt)
             self.assertIn(str(identity_lora), command)
 
     def test_explicit_famegrid_weight_overrides_identity_default(self):
@@ -101,7 +101,7 @@ class KreaRunnerTests(unittest.TestCase):
             identity_lora.write_text("fake")
             registry = root / "identities.json"
             registry.write_text(
-                '{"Matheus":{"token":"matheus_person","lora":"%s"}}'
+                '{"Pessoa":{"token":"pessoa_test_token","lora":"%s"}}'
                 % identity_lora
             )
             model = root / "model"
@@ -116,7 +116,7 @@ class KreaRunnerTests(unittest.TestCase):
                 return types.SimpleNamespace(returncode=0)
 
             argv = [
-                "krea2.py", "Matheus giving a talk", "--saida", str(output),
+                "krea2.py", "Pessoa giving a talk", "--saida", str(output),
                 "--peso", "0.55",
             ]
             with (

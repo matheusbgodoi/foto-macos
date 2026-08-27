@@ -58,7 +58,7 @@ no prompt. O roteador seleciona Krea 2, troca o nome pelo token técnico e
 empilha a LoRA de identidade com a Famegrid:
 
 ```bash
-foto gerar "Matheus apresentando uma palestra de tecnologia, foto casual de iPhone"
+foto gerar "Pessoa apresentando uma palestra de tecnologia, foto casual de iPhone"
 ```
 
 Veja [IDENTIDADE.md](IDENTIDADE.md). Se a LoRA ainda não existir, o comando
