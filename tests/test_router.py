@@ -1,6 +1,8 @@
 import importlib.util
 import pathlib
+import types
 import unittest
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -49,6 +51,17 @@ class RouterTests(unittest.TestCase):
             "auto", "foto-natural", False, [], False), "flux2")
         self.assertEqual(ROUTER.select_engine(
             "auto", "cartoon", False, ["style.safetensors"], True), "sdxl")
+
+    def test_krea_route_passes_disable_famegrid(self):
+        args = types.SimpleNamespace(
+            prompt="Pessoa at a desk", tamanho="768x1024", seed=42,
+            sem_famegrid=True,
+        )
+        with mock.patch.object(ROUTER, "run", return_value=0) as run:
+            self.assertEqual(ROUTER.mlx_krea2(
+                args, "/tmp/result.png", "foto-natural"), 0)
+        command = run.call_args.args[0]
+        self.assertIn("--sem-famegrid", command)
 
 
 if __name__ == "__main__":

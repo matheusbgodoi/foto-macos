@@ -145,6 +145,7 @@ def foto_gerar(
     estilo: str = "auto",
     motor: str = "auto",
     loras: list[str] | None = None,
+    sem_famegrid: bool = False,
 ) -> str:
     """Gera a imagem e devolve o caminho.
 
@@ -159,6 +160,8 @@ def foto_gerar(
             maximizar fotorrealismo; Draw Things continua sendo o modo rapido.
         loras: LoRAs SDXL em models/loras, opcionalmente "nome:forca". Quando
             presentes, o roteador seleciona SDXL.
+        sem_famegrid: no Krea 2, preserva a LoRA de identidade mas desliga a
+            Famegrid para um teste A/B limpo.
     """
     # Esses caminhos enfileiram grafos no ComfyUI. Draw Things e Krea/MLX sao
     # processos externos e nao devem pagar o custo de iniciar o servidor.
@@ -185,6 +188,8 @@ def foto_gerar(
         args += ["--seed", seed]
     for l in (loras or []):
         args += ["--lora", l]
+    if sem_famegrid:
+        args.append("--sem-famegrid")
     txt, rc = _rodar("gerar_coringa.py", args)
     if rc != 0 or not os.path.exists(destino):
         return f"falhou:\n{txt[-1200:]}"

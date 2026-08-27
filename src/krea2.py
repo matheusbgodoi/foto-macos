@@ -114,6 +114,10 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--guidance", type=float, default=1.0)
     parser.add_argument("--sem-lora", action="store_true")
+    parser.add_argument(
+        "--sem-famegrid", action="store_true",
+        help="desliga apenas a Famegrid, mantendo LoRAs privadas de identidade",
+    )
     args = parser.parse_args()
 
     if not os.path.isfile(MFLUX):
@@ -124,7 +128,7 @@ def main() -> int:
         print("erro: snapshot Krea 2 Q4 incompleto. Rode: "
               f"hf download {MODEL_REPO}", file=sys.stderr)
         return 2
-    if not args.sem_lora and not os.path.isfile(LORA):
+    if not args.sem_lora and not args.sem_famegrid and not os.path.isfile(LORA):
         print(f"erro: LoRA Famegrid ausente: {LORA}", file=sys.stderr)
         return 2
     width, height = (int(value) for value in args.tamanho.lower().split("x", 1))
@@ -154,8 +158,15 @@ def main() -> int:
         )
     else:
         famegrid_scale = 0.7
+    # Peso zero precisa desativar tambem a trigger textual. Antes, o arquivo da
+    # LoRA era aplicado com peso 0 mas "Famegrid" continuava mudando o prompt.
+    famegrid_enabled = (
+        not args.sem_lora
+        and not args.sem_famegrid
+        and famegrid_scale > 0
+    )
     trigger = ""
-    if not args.sem_lora and not user_prompt.lower().startswith("famegrid"):
+    if famegrid_enabled and not user_prompt.lower().startswith("famegrid"):
         trigger = "Famegrid, "
     prompt = f"{trigger}{user_prompt}. {STYLE[args.estilo]}"
     command = [
@@ -166,12 +177,13 @@ def main() -> int:
         "--seed", str(args.seed), "--output", temporary, "--metadata",
     ]
     if not args.sem_lora:
-        command += ["--lora", LORA, str(famegrid_scale)]
+        if famegrid_enabled:
+            command += ["--lora", LORA, str(famegrid_scale)]
         for identity in identities:
             command += ["--lora", identity["lora"], str(identity.get("scale", 0.85))]
         command += ["--no-bake-lora"]
     print(f"[krea2] {width}x{height} steps={args.steps} guidance={args.guidance} "
-          f"Famegrid={famegrid_scale} identidades="
+          f"Famegrid={famegrid_scale if famegrid_enabled else 'off'} identidades="
           f"{','.join(item['name'] for item in identities) or '-'}",
           file=sys.stderr)
     result = subprocess.run(command)

@@ -87,6 +87,8 @@ def main():
                    choices=("auto", "drawthings", "krea2", "sdxl", "flux2"))
     g.add_argument("--lora", action="append", default=[],
                    help="LoRA SDXL arquivo.safetensors[:forca]; seleciona SDXL")
+    g.add_argument("--sem-famegrid", action="store_true",
+                   help="no Krea 2, mantem identidade mas desliga a LoRA de estilo")
 
     u = sub.add_parser("ampliar", help="upscale (SeedVR2 por padrao)")
     u.add_argument("imagem"); u.add_argument("--escala", type=float, default=2.0)
@@ -167,6 +169,8 @@ def main():
             args += ["--seed", str(a.seed)]
         for l in a.lora:
             args += ["--lora", l]
+        if a.sem_famegrid:
+            args.append("--sem-famegrid")
         return run("gerar_coringa.py", args)
 
     if a.cmd == "ampliar":

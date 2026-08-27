@@ -10,9 +10,9 @@ podem alterar bastante o resultado.
 | modelo/componente | tipo | para que serve no `foto-macos` | quando é escolhido | tempo observado | principal limite |
 |---|---|---|---|---:|---|
 | **Z-Image Turbo i8x** | gerador de imagem | geração rápida de fotografia e estilos comuns | padrão de `foto gerar`, via Draw Things | **40–60 s** perto de 1 MP; 54,7 s no teste 768×1024 | menos natural que Krea/Famegrid e ainda pode errar anatomia |
-| **Krea 2 Turbo Q4** | gerador de imagem | maior teto de fotorrealismo e estética cotidiana | `--estilo famegrid`, `--motor krea2` ou pedido explícito por qualidade máxima | **172,6 s** em 384×512; **689,1 s** em 640×896 | 3–14× mais lento que Z-Image; licença comunitária própria |
+| **Krea 2 Turbo Q4** | gerador de imagem | maior teto de fotorrealismo e estética cotidiana | `--estilo famegrid`, `--motor krea2` ou pedido explícito por qualidade máxima | **~80–110 s** em 640×896, 8 passos; primeira carga pode somar tempo | cerca de 2× mais lento que Z-Image; licença comunitária própria |
 | **Famegrid Natural V1** | LoKr/LoRA para Krea 2 | tira o aspecto excessivamente encenado/cinematográfico e força fotografia comum | carregado junto do Krea, peso padrão 0,7 e trigger `Famegrid` | incluído no tempo do Krea | não corrige sozinho mãos, olhos ou objetos incoerentes |
-| **LoRA de identidade Krea 2** | adapter privado por pessoa | repete rosto, cabelo e aparência ao citar o nome cadastrado | empilhado com Famegrid; força automaticamente o backend Krea 2 | incluído no tempo do Krea | melhora muito a semelhança, mas não oferece garantia biométrica e pode puxar enquadramentos do dataset |
+| **LoRA de identidade Krea 2** | adapter privado por pessoa | repete rosto, cabelo e aparência ao citar o nome cadastrado | força automaticamente o backend Krea 2; produção medida: Musubi step 750, peso 1,1, Famegrid desligada | incluído no tempo do Krea | melhora muito a semelhança, mas não oferece garantia biométrica e varia com seed/enquadramento |
 | **Mage-Flow-Edit-Turbo 4B** | editor por instrução | troca roupa, objetos ou fundo mantendo a foto como base | `foto editar` e `foto vestir` | **44–160 s** para a difusão, normalmente perto de 100 s | redesenha o quadro; o pipeline precisa recolocar a cabeça e casar o grão |
 | **Qwen3-VL-4B** | encoder texto/visão | lê a instrução e as imagens para o Mage-Flow | automaticamente durante edição | incluído no tempo do Mage | não gera pixels sozinho |
 | **FLUX.2 Klein 4B** | gerador/editor multi-reference | cria cenas novas com pessoa, roupa e objetos de várias referências; fallback de geração | `foto cena` ou quando Draw Things não está disponível | **212,6 s** para 3 referências em 896×1216 | identidade zero-shot é semelhante, não biométrica/pixel-idêntica |
@@ -27,7 +27,7 @@ podem alterar bastante o resultado.
 | caso | rota completa | tempo típico/medido |
 |---|---|---:|
 | gerar rápido | Z-Image + Draw Things | **40–60 s** |
-| gerar com máximo fotorrealismo/identidade | Krea 2 Q4 + Famegrid + LoRA opcional | **~1–3 min** em 384–512 px; **~11,5 min** em 640×896 |
+| gerar com máximo fotorrealismo/identidade | Krea 2 Q4 + Famegrid + LoRA opcional | **~1,5–2 min** em 640×896 depois do download/cache |
 | gerar com uma LoRA SDXL | RealVisXL + LoRA | **~48 s** no teste base; varia com steps/LoRA |
 | editar mantendo rosto/cenário | Mage → RealVisXL 0,03 → cabeça original → grão | **~3–4 min** |
 | editar e ampliar 2× | pipeline anterior + SeedVR2 antes do composite | aproximadamente **4 min** |
@@ -50,6 +50,8 @@ pesos e pode demorar mais.
 | 4x-UltraSharpV2 | 183 s no teste, menos eficiente que SeedVR2 e licença inadequada ao padrão público | removido |
 | RealESRGAN x2/x4 | redundante diante de SeedVR2/Lanczos nas rotas atuais | removido |
 | PuLID-Flux2 não oficial | integração/pesos não demonstraram uma carga de identidade válida | não usado |
+| Krea2-ReID INT8 ConvRot no ComfyUI/MPS | carregou 21,6 GB de modelo+encoder, mas `aten::_int_mm` não existe no MPS; fallback chegou a ~33 GB de swap e não completou o primeiro passo em 176 s | workflow preservado para CUDA, fora do roteador do Mac |
+| Krea 2 Turbo Q8 no MFLUX | 360 s e 23,2 GB de pico contra ~90 s/16,8 GB do Q4; ganho visual sutil | experimental, não é padrão de produção |
 
 ## Regra prática
 

@@ -54,8 +54,8 @@ foto gerar "frasco de perfume sobre pedra" --estilo produto
 ```
 
 Se um nome estiver cadastrado no registro privado de identidades, basta usá-lo
-no prompt. O roteador seleciona Krea 2, troca o nome pelo token técnico e
-empilha a LoRA de identidade com a Famegrid:
+no prompt. O roteador seleciona Krea 2, troca o nome pelo token técnico e aplica
+a LoRA de identidade. A Famegrid é opcional e pode ser desligada por pessoa:
 
 ```bash
 foto gerar "Pessoa apresentando uma palestra de tecnologia, foto casual de iPhone"

@@ -18,7 +18,7 @@ não envia fotos para APIs externas.
 | pedido | backend | motivo |
 |---|---|---|
 | geração rápida/fotográfica | Draw Things + Z-Image Turbo i8x | runtime Metal quantizado; 54,7 s no teste “iPhone” |
-| fotorrealismo máximo (opt-in) | MLX + Krea 2 Turbo Q4 + Famegrid | melhor estética natural; 14,1× mais lento no teste cheio |
+| fotorrealismo máximo ou identidade cadastrada | MLX + Krea 2 Turbo Q4 + LoRA opcional | melhor estética natural; cerca de 80–110 s em 640×896 com o modelo em cache |
 | geração sem Draw Things | ComfyUI + FLUX.2 Klein 4B | fallback aberto e instalado pelo projeto |
 | geração com LoRA SDXL | ComfyUI + RealVisXL | ecossistema amplo de estilos/LoRAs |
 | cena nova com referências | ComfyUI + FLUX.2 Klein 4B | edição multi-referência nativa |
@@ -110,6 +110,8 @@ Recarregue `http://127.0.0.1:8188` e abra **Workflows → Browse → foto-macos*
 3. Gerar versátil — FLUX.2 Klein 4B
 4. Gerar rápido — Z-Image/Draw Things i8x (mesmo motor do CLI)
 5. Fotorrealismo — Krea 2/Famegrid MLX (mesmo motor do CLI)
+6. Identidade por referência — Krea 2 ReID (receita oficial para CUDA; não é
+   executável de produção no MPS deste Mac)
 
 Os grafos representam o núcleo de difusão. Vision.framework e SeedVR2/MLX são
 processos externos ao ComfyUI e, por isso, o pipeline completo continua sendo
@@ -132,8 +134,8 @@ Configuração para Claude Code, Codex, OpenCode, Pi e Local Studio:
 | operação | tempo observado |
 |---|---:|
 | geração “iPhone”, Z-Image/Draw Things, 768×1024 | **54,7 s** |
-| Krea 2/Famegrid, 384×512 | **172,6 s** |
-| Krea 2/Famegrid, 640×896 | **689,1 s** (pico MLX 18,15 GB) |
+| Krea 2 Turbo Q4, 640×896, 8 passos | **~80–110 s** (pico observado 16,8 GB) |
+| Krea 2 Turbo Q8, 640×896, 8 passos | **360 s** (pico 23,2 GB; fora da produção) |
 | geração SDXL, 896×1152 | **48 s** |
 | cena FLUX.2, 3 referências, 896×1216 | **212,6 s** |
 | edição Mage, ~1 MP | **44–160 s** |
