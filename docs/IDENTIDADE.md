@@ -37,7 +37,7 @@ Aceite os termos de [Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw) na
 mesma conta usada por `hf auth login`. O Turbo não substitui o Raw durante o
 treino; a própria Krea recomenda treinar no Raw e aplicar a LoRA no Turbo.
 
-O MFLUX é o runtime de treino para Apple Silicon:
+O MFLUX é uma opção de treino no próprio Apple Silicon:
 
 ```bash
 uv tool install mflux
@@ -48,7 +48,41 @@ mflux-train --config "$PRIVATE/train.json"
 Comece com uma época piloto. Verifique que os tensores `lora_B` do checkpoint
 possuem norma diferente de zero e gere exemplos com seeds fixas antes de rodar
 o treino completo. Em 24 GB use QLoRA 8-bit, `max_resolution: 512`, batch 1,
-gradient checkpointing nativo do adaptador Krea e `low_ram: true`.
+gradient checkpointing nativo do adaptador Krea e `low_ram: true`. Para datasets
+maiores ou 768 px, uma GPU NVIDIA de 24 GB é mais prática.
+
+### RTX 3090 + SimpleTuner
+
+Krea 2 Raw tem 26,98 GB lógicos, portanto não cabe inteiro em BF16 numa placa de
+24 GB. A configuração validada usa `int8-torchao` com quantização inicial na
+CPU e executa forward/backward em CUDA BF16. Em 768 px, batch 1 e rank 32, os
+gradientes/estado do otimizador são descarregados para RAM; o modelo e o cálculo
+principal continuam na GPU.
+
+Opções relevantes:
+
+```json
+{
+  "base_model_precision": "int8-torchao",
+  "quantize_via": "cpu",
+  "mixed_precision": "bf16",
+  "resolution": 768,
+  "train_batch_size": 1,
+  "lora_rank": 32,
+  "gradient_checkpointing": true,
+  "fuse_qkv_projections": true,
+  "attention_mechanism": "cudnn",
+  "optimizer": "optimi-lion",
+  "optimizer_offload_gradients": true,
+  "optimizer_release_gradients": true,
+  "max_grad_norm": 0.0
+}
+```
+
+Com `optimizer_release_gradients`, algumas versões do SimpleTuner deixam
+`grad_norm` como `float`, mas o logger chama `.clone()` ao salvar. A correção
+compatível está em `patches/simpletuner-grad-metric.patch`; aplique no clone do
+SimpleTuner com `git apply` antes do treino.
 
 ### SimpleTuner com QKV fundido + MFLUX
 
@@ -79,7 +113,8 @@ Crie o arquivo privado:
   "Nome": {
     "token": "pessoa_rara_token",
     "lora": "/caminho/privado/identidade-krea2.safetensors",
-    "scale": 0.85
+    "scale": 0.85,
+    "famegrid_scale": 0.3
   }
 }
 ```
@@ -90,8 +125,10 @@ Depois disso, CLI e MCP reconhecem o nome sem opção extra:
 foto gerar "Nome trabalhando naturalmente em um café, foto casual de iPhone"
 ```
 
-O roteador executa Krea 2 Turbo + Famegrid + LoRA de identidade. `foto status`
-mostra `ok` ou `PENDENTE` para cada identidade cadastrada.
+O roteador executa Krea 2 Turbo + Famegrid + LoRA de identidade. Sem identidade,
+Famegrid usa 0,7; com identidade, cai para 0,3 por padrão para não dominar os
+traços aprendidos. `--peso` sobrescreve esse valor. `foto status` mostra `ok` ou
+`PENDENTE` para cada identidade cadastrada.
 
 ## Privacidade
 

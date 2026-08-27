@@ -84,9 +84,54 @@ class KreaRunnerTests(unittest.TestCase):
 
             command = seen["command"]
             self.assertEqual(command.count("--lora"), 2)
+            famegrid_position = command.index(str(famegrid))
+            self.assertEqual(command[famegrid_position + 1], "0.3")
             prompt = command[command.index("--prompt") + 1]
             self.assertIn("matheus_person giving a talk", prompt)
             self.assertIn(str(identity_lora), command)
+
+    def test_explicit_famegrid_weight_overrides_identity_default(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+            binary = root / "mflux-generate-krea2"
+            binary.write_text("fake")
+            famegrid = root / "famegrid.safetensors"
+            famegrid.write_text("fake")
+            identity_lora = root / "matheus.safetensors"
+            identity_lora.write_text("fake")
+            registry = root / "identities.json"
+            registry.write_text(
+                '{"Matheus":{"token":"matheus_person","lora":"%s"}}'
+                % identity_lora
+            )
+            model = root / "model"
+            model.mkdir()
+            output = root / "result.png"
+            seen = {}
+
+            def fake_run(command):
+                seen["command"] = command
+                temporary = pathlib.Path(command[command.index("--output") + 1])
+                temporary.write_bytes(b"fresh")
+                return types.SimpleNamespace(returncode=0)
+
+            argv = [
+                "krea2.py", "Matheus giving a talk", "--saida", str(output),
+                "--peso", "0.55",
+            ]
+            with (
+                mock.patch.object(KREA, "MFLUX", str(binary)),
+                mock.patch.object(KREA, "LORA", str(famegrid)),
+                mock.patch.object(KREA, "IDENTITIES_FILE", str(registry)),
+                mock.patch.object(KREA, "model_path", return_value=str(model)),
+                mock.patch.object(KREA.subprocess, "run", side_effect=fake_run),
+                mock.patch.object(sys, "argv", argv),
+            ):
+                self.assertEqual(KREA.main(), 0)
+
+            command = seen["command"]
+            famegrid_position = command.index(str(famegrid))
+            self.assertEqual(command[famegrid_position + 1], "0.55")
 
 
 if __name__ == "__main__":

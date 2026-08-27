@@ -106,7 +106,11 @@ def main() -> int:
     parser.add_argument("--tamanho", default="1024x1024")
     parser.add_argument("--seed", type=int, default=int(time.time()) % 1_000_000_000)
     parser.add_argument("--estilo", choices=tuple(STYLE), default="natural")
-    parser.add_argument("--peso", type=float, default=0.7)
+    parser.add_argument(
+        "--peso", type=float, default=None,
+        help=("peso da Famegrid; padrao 0.7 sem identidade e 0.3 quando uma "
+              "identidade privada e reconhecida"),
+    )
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--guidance", type=float, default=1.0)
     parser.add_argument("--sem-lora", action="store_true")
@@ -137,6 +141,19 @@ def main() -> int:
                   f"LoRA ainda nao existe: {identity['lora']}", file=sys.stderr)
             return 2
     user_prompt = apply_identities(user_prompt, identities)
+    if args.peso is not None:
+        famegrid_scale = args.peso
+    elif identities:
+        # Famegrid forte melhora o aspecto natural, mas compete com a LoRA de
+        # identidade. Nos testes controlados no M5, 0.3 preservou muito mais o
+        # rosto que 0.7 sem perder o look fotografico. Cada identidade pode
+        # calibrar esse valor no registro privado.
+        famegrid_scale = min(
+            float(identity.get("famegrid_scale", 0.3))
+            for identity in identities
+        )
+    else:
+        famegrid_scale = 0.7
     trigger = ""
     if not args.sem_lora and not user_prompt.lower().startswith("famegrid"):
         trigger = "Famegrid, "
@@ -149,12 +166,12 @@ def main() -> int:
         "--seed", str(args.seed), "--output", temporary, "--metadata",
     ]
     if not args.sem_lora:
-        command += ["--lora", LORA, str(args.peso)]
+        command += ["--lora", LORA, str(famegrid_scale)]
         for identity in identities:
             command += ["--lora", identity["lora"], str(identity.get("scale", 0.85))]
         command += ["--no-bake-lora"]
     print(f"[krea2] {width}x{height} steps={args.steps} guidance={args.guidance} "
-          f"Famegrid={args.peso} identidades="
+          f"Famegrid={famegrid_scale} identidades="
           f"{','.join(item['name'] for item in identities) or '-'}",
           file=sys.stderr)
     result = subprocess.run(command)
