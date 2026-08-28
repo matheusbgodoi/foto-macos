@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from comfy_service import COMFY, comfy_ok
 from krea2 import identity_registry, model_path as krea_model_path
@@ -40,6 +41,22 @@ def report() -> str:
     krea_ok = os.path.isfile(famegrid) and bool(krea_model_path())
     lines.append(
         f"  {'ok   ' if krea_ok else 'opcional ausente'} fotorrealismo: Krea 2 Q4 + Famegrid")
+    reid_paths = (
+        f"{models}/diffusion_models/krea2_turbo_int8_convrot.safetensors",
+        f"{models}/vae/qwen_image_vae.safetensors",
+        f"{models}/loras/krea2_reid_rank32.safetensors",
+        os.path.expanduser(
+            os.environ.get("COMFYUI_DIR", "~/comfyui")
+            + "/custom_nodes/ComfyUI-Krea2-Ostris-Edit/nodes.py"),
+    )
+    reid_installed = all(os.path.isfile(path) for path in reid_paths)
+    if reid_installed and sys.platform == "darwin":
+        reid_state = "instalado; MPS incompatível"
+    elif reid_installed:
+        reid_state = "ok   "
+    else:
+        reid_state = "opcional ausente"
+    lines.append(f"  {reid_state} identidade por referencia: Krea 2 ReID")
     for name, config in identity_registry().items():
         path = os.path.abspath(os.path.expanduser(str(config.get("lora", ""))))
         lines.append(

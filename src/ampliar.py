@@ -54,15 +54,29 @@ def main():
     ap.add_argument("imagem")
     ap.add_argument("--out", required=True, help="caminho do arquivo de saida")
     ap.add_argument("--escala", type=float, default=2.0)
-    ap.add_argument("--softness", type=float, default=0.5,
-                    help="0 = mais detalhe e mais risco de artefato; 1 = mais suave")
+    ap.add_argument(
+        "--modo", choices=("fiel", "equilibrado", "criativo"),
+        default="equilibrado",
+        help=("fiel: sem pre-downsampling (softness 0); equilibrado: 0.5; "
+              "criativo: 0.75, reconstrucao mais livre e maior risco de mudar tracos"),
+    )
+    ap.add_argument(
+        "--softness", type=float, default=None,
+        help=("ajuste avancado que substitui --modo. 0 preserva mais a entrada; "
+              "valores maiores pre-reduzem a imagem e dao mais liberdade ao modelo"),
+    )
     a = ap.parse_args()
 
     img = os.path.abspath(os.path.expanduser(a.imagem))
     out = os.path.abspath(os.path.expanduser(a.out))
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
 
-    if seedvr2(img, out, a.escala, a.softness) == 0:
+    presets = {"fiel": 0.0, "equilibrado": 0.5, "criativo": 0.75}
+    softness = a.softness if a.softness is not None else presets[a.modo]
+    if not 0.0 <= softness <= 1.0:
+        ap.error("--softness precisa estar entre 0 e 1")
+    print(f"[ampliar] modo={a.modo} softness={softness:g}")
+    if seedvr2(img, out, a.escala, softness) == 0:
         return 0
     print("[ampliar] caindo para Lanczos; nenhum detalhe sera inventado")
     return lanczos(img, out, a.escala)

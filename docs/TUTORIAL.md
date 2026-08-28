@@ -54,8 +54,8 @@ foto gerar "frasco de perfume sobre pedra" --estilo produto
 ```
 
 Se um nome estiver cadastrado no registro privado de identidades, basta usá-lo
-no prompt. O roteador seleciona Krea 2, troca o nome pelo token técnico e
-empilha a LoRA de identidade com a Famegrid:
+no prompt. O roteador seleciona Krea 2, troca o nome pelo token técnico e aplica
+a LoRA de identidade. A Famegrid é opcional e pode ser desligada por pessoa:
 
 ```bash
 foto gerar "Pessoa apresentando uma palestra de tecnologia, foto casual de iPhone"
@@ -112,11 +112,22 @@ mas recria a pessoa; não garante identidade biométrica ou pixel-idêntica.
 ## Ampliar
 
 ```bash
-foto ampliar ~/Downloads/imagem.png --escala 2
+foto ampliar ~/Downloads/imagem.png --escala 2 --modo fiel
+foto ampliar ~/Downloads/paisagem.png --escala 2 --modo equilibrado
 ```
 
-SeedVR2 é generativo e pode alterar microdetalhes. Em JPEGs pequenos do WhatsApp
-ou quando o rosto já está correto, compare também a versão sem upscale.
+Os modos controlam quanto o SeedVR2 pode reconstruir:
+
+| modo | softness | uso |
+|---|---:|---|
+| `fiel` | 0 | sem pre-downsampling; prefira para rostos e identidade |
+| `equilibrado` | 0,5 | mais reconstrução de tecido, cabelo e cenário |
+| `criativo` | 0,75 | restauração agressiva; pode mudar traços e objetos |
+
+SeedVR2 é generativo mesmo no modo `fiel`: ele pode alterar olhos, pele e
+microgeometria. Quando a identidade já está correta, compare com a entrada e
+não promova automaticamente a versão ampliada. No pipeline de edição, as etapas
+generativas rodam antes de a cabeça original ser recomposta.
 
 ## Workflows visuais
 

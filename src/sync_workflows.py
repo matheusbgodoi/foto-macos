@@ -107,6 +107,17 @@ def main():
     USER_OUT.mkdir(parents=True, exist_ok=True)
     shutil.copy2(krea_workflow, USER_OUT / krea_workflow.name)
 
+    # Workflow oficial do Krea2-ReID. Ele usa o checkpoint INT8 ConvRot e um
+    # único retrato de referência; manter a receita oficial versionada evita
+    # que o grafo visual se afaste dos parâmetros nos quais o adapter foi
+    # treinado (8 steps, CFG 1, Euler/simple, LoRA 1.0 e KV cache ligado).
+    reid_source = ROOT / "workflows/vendor/krea2_reid_comfyui.json"
+    reid_name = "06 - Identidade por referencia - Krea 2 ReID.json"
+    if reid_source.exists():
+        for directory in (REPO_OUT, USER_OUT):
+            directory.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(reid_source, directory / reid_name)
+
     readme = """# Workflows visuais
 
 Estes arquivos sao gerados por `src/sync_workflows.py` a partir dos templates
@@ -124,6 +135,11 @@ na pasta `foto-macos` depois de recarregar `http://127.0.0.1:8188`.
    nao chamar a fila do ComfyUI de dentro dela mesma.
 5. **Fotorrealismo / Krea 2 + Famegrid** — chama o mesmo runtime MLX Q4 do
    CLI/MCP por um no customizado; nao duplica o checkpoint dentro do ComfyUI.
+6. **Identidade por referencia / Krea 2 ReID** — workflow oficial de identidade
+   zero-shot com um retrato; usa Krea 2 INT8 ConvRot e roda diretamente no
+   ComfyUI. O grafo foi validado em CUDA; no Apple MPS, o INT8 ConvRot exige
+   `aten::_int_mm`, cai no CPU e nao e praticavel. Fica instalado para abrir,
+   estudar e usar em um host NVIDIA, mas nao entra no roteador do Mac.
 
 O pipeline completo de preservacao de identidade tambem usa Vision.framework
 e SeedVR2/MLX. Essas etapas nao sao nos do ComfyUI; o grafo visual mostra o

@@ -166,9 +166,12 @@ def comfy_flux2(args, output):
 def mlx_krea2(args, output, style):
     krea_style = "iphone" if style == "iphone" else (
         "profissional" if style in ("profissional", "produto") else "natural")
-    return run([PY, os.path.join(HERE, "krea2.py"), args.prompt,
-                "--saida", output, "--tamanho", args.tamanho,
-                "--seed", str(args.seed), "--estilo", krea_style])
+    command = [PY, os.path.join(HERE, "krea2.py"), args.prompt,
+               "--saida", output, "--tamanho", args.tamanho,
+               "--seed", str(args.seed), "--estilo", krea_style]
+    if args.sem_famegrid:
+        command.append("--sem-famegrid")
+    return run(command)
 
 
 def main():
@@ -183,6 +186,7 @@ def main():
     parser.add_argument("--motor", default="auto",
                         choices=("auto", "drawthings", "krea2", "sdxl", "flux2"))
     parser.add_argument("--lora", action="append", default=[])
+    parser.add_argument("--sem-famegrid", action="store_true")
     args = parser.parse_args()
 
     style = detect_style(args.prompt) if args.estilo == "auto" else args.estilo
